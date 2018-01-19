@@ -14,9 +14,10 @@ import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, Logg
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.ErrorReport
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.gpalloc.errorReportSource
+import org.broadinstitute.dsde.workbench.gpalloc.model.GPAllocException
 import org.broadinstitute.dsde.workbench.gpalloc.service._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -42,8 +43,8 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val sy
       path("googleproject") {
         get {
           complete {
-            gpAllocService.newGoogleProject(userInfo).map { _ =>
-              StatusCodes.OK
+            gpAllocService.requestGoogleProject(userInfo).map { newProject =>
+              StatusCodes.OK -> newProject.value
             }
           }
         }
@@ -67,8 +68,10 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val sy
 
   private val myExceptionHandler = {
     ExceptionHandler {
-      //case withErrorReport: WorkbenchExceptionWithErrorReport =>
-      //  complete(withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport)
+      case gpAllocException: GPAllocException =>
+        complete(gpAllocException.statusCode, gpAllocException.toErrorReport)
+      case withErrorReport: WorkbenchExceptionWithErrorReport =>
+        complete(withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport)
       case e: Throwable =>
         complete(StatusCodes.InternalServerError, ErrorReport(e))
     }
