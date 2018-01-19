@@ -7,7 +7,9 @@ import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.gpalloc.api.GPAllocRoutes
+import org.broadinstitute.dsde.workbench.gpalloc.api.{GPAllocRoutes, StandardUserInfoDirectives}
+import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
+import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -22,7 +24,10 @@ object Boot extends App with LazyLogging {
     implicit val materializer = ActorMaterializer()
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    val gpallocRoutes = new GPAllocRoutes()
+    val googleBillingDAO = new HttpGoogleBillingDAO("gpalloc")
+    val gpAllocService = new GPAllocService(googleBillingDAO)
+
+    val gpallocRoutes = new GPAllocRoutes(gpAllocService) with StandardUserInfoDirectives
 
       Http().bindAndHandle(gpallocRoutes.route, "0.0.0.0", 8080)
         .recover {
