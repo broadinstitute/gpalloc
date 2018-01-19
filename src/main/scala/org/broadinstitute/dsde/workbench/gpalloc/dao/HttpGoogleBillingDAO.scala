@@ -24,8 +24,15 @@ class HttpGoogleBillingDAO(appName: String)
     new Cloudbilling.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
+  //Transfer project ownership from ths gpalloc SA to the owner user
+  def transferProjectOwnership(project: GoogleProject, owner: String): Future[GoogleProject] = {
+    //TODO: actually do the work
+    Future.successful(project)
+  }
+
   def nukeBillingProject(userInfo: UserInfo, project: GoogleProject): Future[Unit] = {
     billing(userInfo.accessToken.value)
+    //TODO: clean up all the things
     Future.successful(())
   }
 

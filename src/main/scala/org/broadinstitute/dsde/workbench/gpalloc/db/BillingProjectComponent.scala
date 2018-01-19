@@ -36,8 +36,8 @@ trait BillingProjectComponent extends GPAllocComponent {
 
   object billingProjectQuery extends TableQuery(new BillingProjectTable(_)) {
 
-    def save(billingProject: String, owner: String): DBIO[String] = {
-      (billingProjectQuery returning billingProjectQuery.map(_.id) += BillingProjectRecord(0, billingProject, Some(owner))) map { _ =>
+    def saveNew(billingProject: String): DBIO[String] = {
+      (billingProjectQuery returning billingProjectQuery.map(_.id) += BillingProjectRecord(0, billingProject, None)) map { _ =>
         billingProject
       }
     }

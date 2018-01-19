@@ -9,6 +9,7 @@ import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.gpalloc.api.{GPAllocRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
+import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -24,8 +25,10 @@ object Boot extends App with LazyLogging {
     implicit val materializer = ActorMaterializer()
     import scala.concurrent.ExecutionContext.Implicits.global
 
+    val dbRef = DbReference.init(config)
+
     val googleBillingDAO = new HttpGoogleBillingDAO("gpalloc")
-    val gpAllocService = new GPAllocService(googleBillingDAO)
+    val gpAllocService = new GPAllocService(dbRef, googleBillingDAO)
 
     val gpallocRoutes = new GPAllocRoutes(gpAllocService) with StandardUserInfoDirectives
 
