@@ -7,6 +7,7 @@ object Dependencies {
   val googleV       = "1.22.0"
   val scalaLoggingV = "3.7.2"
   val scalaTestV    = "3.0.1"
+  val slickV        = "3.2.1"
 
   val workbenchUtilV    = "0.2-d97f551"
   val workbenchModelV   = "0.9-7a4d3bd"
@@ -49,6 +50,12 @@ object Dependencies {
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google"  % workbenchGoogleV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel, excludeWorkbenchMetrics)
   val workbenchMetrics: ModuleID =   "org.broadinstitute.dsde.workbench" %% "workbench-metrics" % workbenchMetricsV excludeAll(excludeWorkbenchUtil)
 
+
+  val slick: ModuleID =     "com.typesafe.slick" %% "slick"                 % slickV
+  val hikariCP: ModuleID =  "com.typesafe.slick" %% "slick-hikaricp"        % slickV
+  val mysql: ModuleID =     "mysql"               % "mysql-connector-java"  % "6.0.6"
+  val liquibase: ModuleID = "org.liquibase"       % "liquibase-core"        % "3.5.3"
+
   val googleBilling: ModuleID = "com.google.apis" % "google-api-services-cloudbilling" % "v1-rev16-1.23.0" excludeAll(excludeGuavaJDK5)
 
   val rootDependencies = Seq(
@@ -80,6 +87,13 @@ object Dependencies {
     workbenchUtil,
     workbenchModel,
     workbenchGoogle,
-    workbenchMetrics
+    workbenchMetrics,
+
+    googleBilling,
+
+    slick,
+    hikariCP,
+    mysql,
+    liquibase
   )
 }
