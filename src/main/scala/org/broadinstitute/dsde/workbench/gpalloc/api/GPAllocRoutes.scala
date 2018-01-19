@@ -7,9 +7,9 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import SprayJsonSupport._
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server
-import akka.http.scaladsl.server.Directives.{complete, get, handleExceptions, pathEndOrSingleSlash, pathPrefix}
-import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
+import akka.http.scaladsl.server._
 import akka.http.scaladsl.server.RouteResult.Complete
+import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, LoggingMagnet}
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
@@ -17,14 +17,16 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.ErrorReport
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.gpalloc.errorReportSource
+import org.broadinstitute.dsde.workbench.gpalloc.service._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class GPAllocRoutes()(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
-  extends LazyLogging {
+abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
+  extends LazyLogging
+    with UserInfoDirectives {
 
-  def gpallocRoutes: server.Route =
-    pathPrefix("ping") {
+  def unauthedRoutes: Route =
+    path("ping") {
       pathEndOrSingleSlash {
         get {
           complete {
@@ -34,8 +36,33 @@ class GPAllocRoutes()(implicit val system: ActorSystem, val materializer: Materi
       }
     }
 
+  def gpAllocRoutes: Route =
+    requireUserInfo { userInfo =>
+
+      path("googleproject") {
+        get {
+          complete {
+            gpAllocService.newGoogleProject(userInfo).map { _ =>
+              StatusCodes.OK
+            }
+          }
+        }
+      } ~
+      path("googleproject" / Segment) { project =>
+        delete {
+          complete {
+            gpAllocService.releaseGoogleProject(userInfo, project).map { _ =>
+              StatusCodes.OK
+            }
+          }
+        }
+      }
+
+    }
+
+
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
-    gpallocRoutes
+    unauthedRoutes ~ gpAllocRoutes
   }
 
   private val myExceptionHandler = {
