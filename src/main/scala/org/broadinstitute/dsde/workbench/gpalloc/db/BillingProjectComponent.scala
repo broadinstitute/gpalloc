@@ -24,13 +24,8 @@ trait BillingProjectComponent extends GPAllocComponent {
     def billingProjectName =          column[String]            ("billingProjectName",    O.Length(254))
     def owner =                       column[Option[String]]    ("owner",                 O.Length(254))
 
+    def uniqueKey = index("BILLING_PROJECT_NAME", billingProjectName, unique = true)
 
-    def uniqueKey = index("IDX_CLUSTER_UNIQUE", id, unique = true)
-
-    // Can't use the shorthand
-    //   def * = (...) <> (ClusterRecord.tupled, ClusterRecord.unapply)
-    // because CLUSTER has more than 22 columns.
-    // So we split ClusterRecord into multiple case classes and bind them to slick in the following way.
     def * = (id, billingProjectName, owner) <> (BillingProjectRecord.tupled, BillingProjectRecord.unapply)
   }
 
@@ -50,6 +45,10 @@ trait BillingProjectComponent extends GPAllocComponent {
           case None => DBIO.successful(None)
         }
       }
+    }
+
+    def reclaimProject(project: String): DBIO[Unit] = {
+      billingProjectQuery.filter(_.billingProjectName === project).map(_.owner).update(None).map { _ => () }
     }
 
   }
