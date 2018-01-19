@@ -26,7 +26,13 @@ class GPAllocService(protected val dbRef: DbReference, googleBillingDAO: HttpGoo
   }
 
   def releaseGoogleProject(userInfo: UserInfo, project: String): Future[Unit] = {
-    googleBillingDAO.nukeBillingProject(userInfo, GoogleProject(project))
+    for {
+      _ <- googleBillingDAO.nukeBillingProject(userInfo, GoogleProject(project))
+      _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.reclaimProject(project) }
+    } yield {
+      ()
+    }
+
   }
 
   def createNewGoogleProject(): Future[Unit] = {
