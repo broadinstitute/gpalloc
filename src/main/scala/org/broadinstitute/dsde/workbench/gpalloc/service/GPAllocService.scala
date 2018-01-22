@@ -36,7 +36,7 @@ class GPAllocService(protected val dbRef: DbReference, googleBillingDAO: HttpGoo
   }
 
   def createNewGoogleProject(): Future[Unit] = {
-    //TODO: orch.makeNewProject, map billingProjectQuery.saveNew
+    //TODO: POST /api/billing, map billingProjectQuery.saveNew
     Future.successful(())
   }
 }

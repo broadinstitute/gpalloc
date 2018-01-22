@@ -3,28 +3,26 @@ package org.broadinstitute.dsde.workbench.gpalloc.db
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 
-case class BillingProjectRecord(id: Long,
-                                billingProjectName: String,
-                                owner: Option[String],
-                                status: String)
+case class ActiveOperationRecord(billingProjectId: Long,
+                                 operation: String)
 
-trait BillingProjectComponent extends GPAllocComponent {
+trait ActiveOperationComponent extends GPAllocComponent {
+  this: BillingProjectComponent =>
 
   import profile.api._
 
-  class BillingProjectTable(tag: Tag) extends Table[BillingProjectRecord](tag, "BILLING_PROJECT") {
-    def id =                          column[Long]              ("id",                    O.PrimaryKey, O.AutoInc)
-    def billingProjectName =          column[String]            ("billingProjectName",    O.Length(254))
-    def owner =                       column[Option[String]]    ("owner",                 O.Length(254))
-    def status =                      column[String]            ("status",                O.Length(254))
+  class ActiveOperationTable(tag: Tag) extends Table[ActiveOperationRecord](tag, "ACTIVE_OPERATION") {
+    def billingProjectId =            column[Long]              ("billingProjectId")
+    def operation =                   column[String]            ("operation", O.Length(254))
 
-    def uniqueKey = index("BILLING_PROJECT_NAME", billingProjectName, unique = true)
+    def fkBillingProject = foreignKey("FK_BILLING_PROJECT", billingProjectId, billingProjectQuery)(_.id)
 
-    def * = (id, billingProjectName, owner, status) <> (BillingProjectRecord.tupled, BillingProjectRecord.unapply)
+    def * = (billingProjectId, operation) <> (ActiveOperationRecord.tupled, ActiveOperationRecord.unapply)
   }
 
-  object billingProjectQuery extends TableQuery(new BillingProjectTable(_)) {
+  object operationQuery extends TableQuery(new ActiveOperationTable(_)) {
 
+    /*
     def findBillingProject(billingProject: String) = {
       billingProjectQuery.filter(_.billingProjectName === billingProject)
     }
@@ -56,6 +54,7 @@ trait BillingProjectComponent extends GPAllocComponent {
     def reclaimProject(billingProject: String): DBIO[Unit] = {
       findBillingProject(billingProject).map(bp => (bp.owner, bp.status)).update(None, BillingProjectStatus.Unassigned.toString).map { _ => () }
     }
+    */
 
   }
 }
