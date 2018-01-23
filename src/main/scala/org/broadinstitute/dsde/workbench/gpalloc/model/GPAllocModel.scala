@@ -2,9 +2,12 @@ package org.broadinstitute.dsde.workbench.gpalloc.model
 
 object BillingProjectStatus extends Enumeration {
   type BillingProjectStatus = Value
-  val BrandNew, Unassigned, Assigned, Deleted = Value
+  val CreatingProject, EnablingServices, Unassigned, Assigned, Deleted = Value
+  val creatingStatuses = Seq(CreatingProject, EnablingServices)
 
-  class StatusValue(status: BillingProjectStatus) {}
+  class StatusValue(status: BillingProjectStatus) {
+    def isCreating = creatingStatuses.contains(status)
+  }
 
   implicit def enumConvert(status: BillingProjectStatus): StatusValue = new StatusValue(status)
 

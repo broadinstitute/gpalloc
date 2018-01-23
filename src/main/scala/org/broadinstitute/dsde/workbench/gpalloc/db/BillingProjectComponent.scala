@@ -3,24 +3,21 @@ package org.broadinstitute.dsde.workbench.gpalloc.db
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 
-case class BillingProjectRecord(id: Long,
-                                billingProjectName: String,
+case class BillingProjectRecord(billingProjectName: String,
                                 owner: Option[String],
                                 status: String)
 
 trait BillingProjectComponent extends GPAllocComponent {
+  this: ActiveOperationComponent =>
 
   import profile.api._
 
   class BillingProjectTable(tag: Tag) extends Table[BillingProjectRecord](tag, "BILLING_PROJECT") {
-    def id =                          column[Long]              ("id",                    O.PrimaryKey, O.AutoInc)
-    def billingProjectName =          column[String]            ("billingProjectName",    O.Length(254))
+    def billingProjectName =          column[String]            ("billingProjectName",    O.PrimaryKey, O.Length(254))
     def owner =                       column[Option[String]]    ("owner",                 O.Length(254))
     def status =                      column[String]            ("status",                O.Length(254))
 
-    def uniqueKey = index("BILLING_PROJECT_NAME", billingProjectName, unique = true)
-
-    def * = (id, billingProjectName, owner, status) <> (BillingProjectRecord.tupled, BillingProjectRecord.unapply)
+    def * = (billingProjectName, owner, status) <> (BillingProjectRecord.tupled, BillingProjectRecord.unapply)
   }
 
   object billingProjectQuery extends TableQuery(new BillingProjectTable(_)) {
@@ -33,10 +30,16 @@ trait BillingProjectComponent extends GPAllocComponent {
       findBillingProject(billingProject).result.headOption
     }
 
-    def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.BrandNew): DBIO[String] = {
-      (billingProjectQuery returning billingProjectQuery.map(_.id) += BillingProjectRecord(0, billingProject, None, status.toString)) map { _ =>
+    private def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.BrandNew): DBIO[String] = {
+      (billingProjectQuery  += BillingProjectRecord(billingProject, None, status.toString)) map { _ =>
         billingProject
       }
+    }
+
+    def saveNewProject(billingProject: String, operationRecord: ActiveOperationRecord, status: BillingProjectStatus = BillingProjectStatus.BrandNew): DBIO[String] = {
+      DBIO.seq(
+        saveNew(billingProject),
+        operationQuery.saveNewOperation(operationRecord)) map { _ => billingProject }
     }
 
     def updateStatus(billingProject: String, status: BillingProjectStatus): DBIO[Unit] = {

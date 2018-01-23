@@ -14,14 +14,15 @@ object ProjectCreationSupervisor {
   sealed trait ProjectCreationSupervisorMessage
   case class CreateProject(projectName: String) extends ProjectCreationSupervisorMessage
 
-  def props(dbRef: DbReference,
+  def props(billingAccount: String,
+            dbRef: DbReference,
             googleDAO: HttpGoogleBillingDAO,
             pollInterval: FiniteDuration = 1 minutes): Props = {
-    Props(new ProjectCreationSupervisor(dbRef, googleDAO, pollInterval))
+    Props(new ProjectCreationSupervisor(billingAccount, dbRef, googleDAO, pollInterval))
   }
 }
 
-class ProjectCreationSupervisor(dbRef: DbReference, googleDAO: HttpGoogleBillingDAO, pollInterval: FiniteDuration)
+class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, googleDAO: HttpGoogleBillingDAO, pollInterval: FiniteDuration)
   extends Actor
   with LazyLogging {
 
@@ -37,7 +38,7 @@ class ProjectCreationSupervisor(dbRef: DbReference, googleDAO: HttpGoogleBilling
   }
 
   def createProject(projectName: String): Unit = {
-    val newProjectMonitor = actorOf(ProjectCreationMonitor.props(projectName, dbRef, googleDAO), projectName)
+    val newProjectMonitor = actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO), projectName)
     newProjectMonitor ! ProjectCreationMonitor.CreateProject
   }
 }
