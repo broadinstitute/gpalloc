@@ -89,9 +89,14 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     Future.successful(project)
   }
 
-  def nukeBillingProject(userInfo: UserInfo, project: GoogleProject): Future[Unit] = {
+  def scrubBillingProject(userInfo: UserInfo, project: String): Future[Unit] = {
     billing
-    //TODO: clean up all the things
+    /* TODO: clean up all the things
+     * The things are:
+     * - IAM policies
+     * - permissions on the Cromwell auth bucket
+     * - keys for pet SAs, but not the pets themselves
+     */
     Future.successful(())
   }
 

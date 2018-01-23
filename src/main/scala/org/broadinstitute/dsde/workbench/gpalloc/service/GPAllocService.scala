@@ -10,10 +10,16 @@ import org.broadinstitute.dsde.workbench.model.UserInfo
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Random
+import scala.util.{Random, Success}
 
 case class NoGoogleProjectAvailable()
   extends GPAllocException(s"Sorry, no free google projects. Make your own", StatusCodes.NotFound)
+
+case class NotYourGoogleProject(project: String, requestingUser: String, ownerUser: String)
+  extends GPAllocException(s"$requestingUser is not authorized to delete $project; make $ownerUser do it", StatusCodes.Unauthorized)
+
+case class GoogleProjectNotFound(project: String)
+  extends GPAllocException(s"$project not found", StatusCodes.NotFound)
 
 class GPAllocService(protected val dbRef: DbReference,
                      projectCreationSupervisor: ActorRef,
@@ -21,7 +27,7 @@ class GPAllocService(protected val dbRef: DbReference,
                     (implicit val executionContext: ExecutionContext) {
 
   def requestGoogleProject(userInfo: UserInfo): Future[String] = {
-    dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignPooledBillingProject(userInfo.userEmail.value) } flatMap {
+    dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
       case Some(project) =>
         googleBillingDAO.transferProjectOwnership(project.billingProjectName, userInfo.userEmail.value)
       case None =>
@@ -31,12 +37,30 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   def releaseGoogleProject(userInfo: UserInfo, project: String): Future[Unit] = {
-    for {
-      _ <- googleBillingDAO.nukeBillingProject(userInfo, GoogleProject(project))
-      _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.reclaimProject(project) }
-    } yield {
-      ()
+    val authCheck = dbRef.inTransaction { da =>
+      da.billingProjectQuery.getBillingProject(project) map {
+        case Some(bp) =>
+          if( bp.owner.getOrElse("") != userInfo.userEmail.value ) {
+            //only assigned projects will have the owner field populated
+            throw NotYourGoogleProject(project, userInfo.userEmail.value, bp.owner.getOrElse(""))
+          }
+        case None => throw GoogleProjectNotFound(project)
+      }
     }
+    authCheck onComplete {
+      case Success(_) =>
+        //nuke the billing project if no auth failures.
+        //onComplete will return the original future, i.e. authCheck, and not wait for onComplete to complete.
+        //we're kicking off this work but not monitoring it.
+        for {
+          _ <- googleBillingDAO.scrubBillingProject(userInfo, project)
+          _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
+        } yield {
+          ()
+        }
+      case _ => //never mind
+    }
+    authCheck
   }
 
   def createNewGoogleProject(): Unit = {

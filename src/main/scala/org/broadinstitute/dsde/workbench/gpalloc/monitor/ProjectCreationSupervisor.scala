@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, PoisonPill, Props, SupervisorStrategy}
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
@@ -33,18 +33,28 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
       createProject(projectName)
     case ResumeAllProjects =>
       resumeAllProjects
-    //TODO: failure handling
   }
+
+  //if a project creation monitor dies, give up on it
+  override val supervisorStrategy = SupervisorStrategy.stoppingStrategy
+
+  val monitorNameBase = "bpmon-"
+  def monitorName(bp: String) = s"${monitorNameBase}bp"
 
   def resumeAllProjects = {
     dbRef.inTransaction { da => da.billingProjectQuery.getCreatingProjects } map { _.foreach { bp =>
-      val newProjectMonitor = actorOf(ProjectCreationMonitor.props(bp.billingProjectName, billingAccount, dbRef, googleDAO), bp.billingProjectName)
+      val newProjectMonitor = context.actorOf(ProjectCreationMonitor.props(bp.billingProjectName, billingAccount, dbRef, googleDAO, pollInterval), monitorName(bp.billingProjectName))
       newProjectMonitor ! ProjectCreationMonitor.WakeUp
     }}
   }
 
   def createProject(projectName: String): Unit = {
-    val newProjectMonitor = actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO), projectName)
+    val newProjectMonitor = context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, pollInterval), monitorName(projectName))
     newProjectMonitor ! ProjectCreationMonitor.CreateProject
+  }
+
+  //TODO: hook this up. drop the database, optionally delete the projects
+  def stopMonitoringEverything: Unit = {
+    system.actorSelection(s"/user/${monitorNameBase}*") ! PoisonPill
   }
 }

@@ -53,7 +53,7 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val sy
         delete {
           complete {
             gpAllocService.releaseGoogleProject(userInfo, project).map { _ =>
-              StatusCodes.OK
+              StatusCodes.Accepted
             }
           }
         }
