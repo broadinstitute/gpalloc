@@ -44,7 +44,7 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val sy
         get {
           complete {
             gpAllocService.requestGoogleProject(userInfo).map { newProject =>
-              StatusCodes.OK -> newProject.value
+              StatusCodes.OK -> newProject
             }
           }
         }

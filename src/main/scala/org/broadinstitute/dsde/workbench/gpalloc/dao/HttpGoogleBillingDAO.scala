@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.gpalloc.dao
 
-import java.io.ByteArrayInputStream
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import com.google.api.client.auth.oauth2.Credential
@@ -16,7 +14,7 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import com.google.api.services.cloudbilling.Cloudbilling
 import com.google.api.services.cloudbilling.model.ProjectBillingInfo
 import com.google.api.services.cloudresourcemanager.CloudResourceManager
-import com.google.api.services.cloudresourcemanager.model.Project
+import com.google.api.services.cloudresourcemanager.model.{Binding, Policy, Project, SetIamPolicyRequest}
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.genomics.GenomicsScopes
@@ -79,15 +77,14 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     new Compute.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
-  def storage = {
+  def storage: Storage = {
     new Storage.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
-  //Transfer project ownership from ths gpalloc SA to the owner user
-  def transferProjectOwnership(project: GoogleProject, owner: String): Future[GoogleProject] = {
-
-    /* TODO: actually do the work, which is:
-     * - set up IAM policies with addPolicyBindings, see https://github.com/broadinstitute/rawls/blob/8140cf4c866324fc3b12cfbe4f47c8a8808ff421/core/src/main/scala/org/broadinstitute/dsde/rawls/monitor/CreatingBillingProjectMonitor.scala#L106
+  def transferProjectOwnership(project: String, owner: String): Future[String] = {
+    /* NOTE: There is no work to be done here. It is up to the caller, inside their own FC stack to:
+     * - set up IAM policies in a manner similar to Rawls' addPolicyBindings
+     * - set up permissions on the Cromwell auth bucket
      */
     Future.successful(project)
   }
@@ -252,5 +249,4 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     val bac = new BucketAccessControl().setEntity("group-cloud-storage-analytics@google.com").setRole("WRITER")
     executeGoogleRequest(storage.bucketAccessControls.insert(bucketName, bac))
   }
-
 }

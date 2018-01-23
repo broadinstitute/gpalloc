@@ -20,10 +20,10 @@ class GPAllocService(protected val dbRef: DbReference,
                      googleBillingDAO: HttpGoogleBillingDAO)
                     (implicit val executionContext: ExecutionContext) {
 
-  def requestGoogleProject(userInfo: UserInfo): Future[GoogleProject] = {
+  def requestGoogleProject(userInfo: UserInfo): Future[String] = {
     dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignPooledBillingProject(userInfo.userEmail.value) } flatMap {
       case Some(project) =>
-        googleBillingDAO.transferProjectOwnership(GoogleProject(project.billingProjectName), userInfo.userEmail.value)
+        googleBillingDAO.transferProjectOwnership(project.billingProjectName, userInfo.userEmail.value)
       case None =>
         createNewGoogleProject() //Create one for the next person who asks
         throw NoGoogleProjectAvailable()
@@ -37,7 +37,6 @@ class GPAllocService(protected val dbRef: DbReference,
     } yield {
       ()
     }
-
   }
 
   def createNewGoogleProject(): Unit = {
