@@ -19,7 +19,7 @@ object ProjectCreationMonitor {
   case object WakeUp extends ProjectCreationMonitorMessage
   case object CreateProject extends ProjectCreationMonitorMessage
   case object EnableServices extends ProjectCreationMonitorMessage
-  case object MarkAsReady extends ProjectCreationMonitorMessage
+  case object CompleteSetup extends ProjectCreationMonitorMessage
   case class PollForStatus(status: BillingProjectStatus) extends ProjectCreationMonitorMessage
   case class ScheduleNextPoll(status: BillingProjectStatus) extends ProjectCreationMonitorMessage
   case class Fail(failedOps: Seq[ActiveOperationRecord]) extends ProjectCreationMonitorMessage
@@ -49,8 +49,8 @@ class ProjectCreationMonitor(projectName: String,
       createNewProject pipeTo self
     case EnableServices =>
       enableServices pipeTo self
-    case MarkAsReady =>
-      markAsReady pipeTo self
+    case CompleteSetup =>
+      completeSetup pipeTo self
     case PollForStatus(status) =>
       pollForStatus(status) pipeTo self
 
@@ -90,10 +90,13 @@ class ProjectCreationMonitor(projectName: String,
     }
   }
 
-  def markAsReady: Future[ProjectCreationMonitorMessage] = {
-    dbRef.inTransaction { da =>
-      da.billingProjectQuery.updateStatus(projectName, Unassigned)
-    } map { _ => Success }
+  def completeSetup: Future[ProjectCreationMonitorMessage] = {
+    for {
+      _ <- googleDAO.setupProjectBucketAccess(projectName)
+      _ <- dbRef.inTransaction { da => da.billingProjectQuery.updateStatus(projectName, Unassigned) }
+    } yield {
+      Success
+    }
   }
 
   //checks Google for status of active operations and figures out what next
@@ -129,7 +132,7 @@ class ProjectCreationMonitor(projectName: String,
   def getNextStatusMessage(status: BillingProjectStatus.BillingProjectStatus): ProjectCreationMonitorMessage = {
     status match {
       case CreatingProject => EnableServices
-      case EnablingServices => MarkAsReady
+      case EnablingServices => CompleteSetup
       case _ => throw new WorkbenchException("what the")
     }
   }
