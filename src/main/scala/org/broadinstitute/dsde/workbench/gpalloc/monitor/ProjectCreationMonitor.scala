@@ -28,15 +28,17 @@ object ProjectCreationMonitor {
   def props(projectName: String,
             billingAccount: String,
             dbRef: DbReference,
-            googleDAO: HttpGoogleBillingDAO): Props = {
-    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO))
+            googleDAO: HttpGoogleBillingDAO,
+            pollInterval: FiniteDuration): Props = {
+    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, pollInterval))
   }
 }
 
 class ProjectCreationMonitor(projectName: String,
                              billingAccount: String,
                              dbRef: DbReference,
-                             googleDAO: HttpGoogleBillingDAO)
+                             googleDAO: HttpGoogleBillingDAO,
+                             pollInterval: FiniteDuration)
   extends Actor
   with LazyLogging {
 
@@ -60,8 +62,7 @@ class ProjectCreationMonitor(projectName: String,
   }
 
   def scheduleNextPoll(status: BillingProjectStatus) = {
-    //FIXME: pollInterval
-    context.system.scheduler.scheduleOnce(5 seconds, self, PollForStatus(status))
+    context.system.scheduler.scheduleOnce(pollInterval, self, PollForStatus(status))
   }
 
   def resumeInflightProject: Future[ProjectCreationMonitorMessage] = {
