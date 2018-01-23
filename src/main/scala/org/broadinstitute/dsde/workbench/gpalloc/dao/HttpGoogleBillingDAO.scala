@@ -29,6 +29,7 @@ import com.google.api.services.storage.model.Bucket.Lifecycle
 import com.google.api.services.storage.model.Bucket.Lifecycle.Rule.{Action, Condition}
 import io.grpc.Status.Code
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
+import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -98,32 +99,26 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
   }
 
   //poll google for what's going on
-  override def pollOperation(rawlsBillingProjectOperation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
-
+  def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
 
     // this code is a colossal DRY violation but because the operations collection is different
     // for cloudResManager and servicesManager and they return different but identical Status objects
     // there is not much else to be done... too bad scala does not have duck typing.
-    rawlsBillingProjectOperation.api match {
-      case API_CLOUD_RESOURCE_MANAGER =>
-        val cloudResManager = getCloudResourceManager(credential)
-
+    BillingProjectStatus.withNameIgnoreCase(operation.operationType) match {
+      case CreatingProject =>
         retryWhen500orGoogleError(() => {
-          executeGoogleRequest(cloudResManager.operations().get(rawlsBillingProjectOperation.operationId))
+          executeGoogleRequest(cloudResources.operations().get(operation.operationId))
         }).map { op =>
-          rawlsBillingProjectOperation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+          operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
 
-      case API_SERVICE_MANAGEMENT =>
-        val servicesManager = getServicesManager(credential)
-
+      case EnablingServices =>
         retryWhen500orGoogleError(() => {
-          executeGoogleRequest(servicesManager.operations().get(rawlsBillingProjectOperation.operationId))
+          executeGoogleRequest(servicesManager.operations().get(operation.operationId))
         }).map { op =>
-          rawlsBillingProjectOperation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+          operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
     }
-
   }
 
   //part 1
