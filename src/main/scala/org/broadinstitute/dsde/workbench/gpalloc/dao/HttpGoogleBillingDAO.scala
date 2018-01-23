@@ -178,7 +178,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
   }
 
   //part 3
-  def completeProjectSetup(projectName: String): Future[Unit] = {
+  def setupProjectBucketAccess(projectName: String): Future[Unit] = {
     val usageBucketName = s"${projectName}-usage-export"
 
     // all of these things should be idempotent
@@ -204,8 +204,6 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     } yield {
       // nothing
     }
-
-    //FIXME: return something useful here (used to be Future[Try[Unit]]
   }
 
   def getGoogleProject(projectName: String): Future[Project] = {
