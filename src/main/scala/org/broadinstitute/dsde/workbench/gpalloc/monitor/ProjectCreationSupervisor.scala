@@ -1,11 +1,10 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
 import akka.actor.{Actor, Props}
-import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
-import org.broadinstitute.dsde.workbench.gpalloc.db.{DataAccess, DbReference}
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{CreateProject, ProjectCreationSupervisorMessage}
+import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -13,6 +12,7 @@ import scala.concurrent.duration._
 object ProjectCreationSupervisor {
   sealed trait ProjectCreationSupervisorMessage
   case class CreateProject(projectName: String) extends ProjectCreationSupervisorMessage
+  case object ResumeAllProjects extends ProjectCreationSupervisorMessage
 
   def props(billingAccount: String,
             dbRef: DbReference,
@@ -31,10 +31,16 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   override def receive = {
     case CreateProject(projectName) =>
       createProject(projectName)
+    case ResumeAllProjects =>
+      resumeAllProjects
+    //TODO: failure handling
   }
 
-  def rescanAllProjects() = {
-    //TODO: make new monitors foreach project being tracked and send them WakeUp
+  def resumeAllProjects = {
+    dbRef.inTransaction { da => da.billingProjectQuery.getCreatingProjects } map { _.foreach { bp =>
+      val newProjectMonitor = actorOf(ProjectCreationMonitor.props(bp.billingProjectName, billingAccount, dbRef, googleDAO), bp.billingProjectName)
+      newProjectMonitor ! ProjectCreationMonitor.WakeUp
+    }}
   }
 
   def createProject(projectName: String): Unit = {
