@@ -28,11 +28,11 @@ import com.google.api.services.storage.model.{Bucket, BucketAccessControl, Objec
 import com.google.api.services.storage.model.Bucket.Lifecycle
 import com.google.api.services.storage.model.Bucket.Lifecycle.Rule.{Action, Condition}
 import io.grpc.Status.Code
+import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
+import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
 import scala.collection.JavaConverters._
-import com.google.auth.oauth2.ServiceAccountCredentials
 
 class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serviceAccountPemFile: String)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext) extends GoogleUtilities {
@@ -98,9 +98,8 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
   }
 
   //poll google for what's going on
-  override def pollOperation(rawlsBillingProjectOperation: RawlsBillingProjectOperationRecord): Future[RawlsBillingProjectOperationRecord] = {
-    implicit val service = GoogleInstrumentedService.Billing
-    val credential = getBillingServiceAccountCredential
+  override def pollOperation(rawlsBillingProjectOperation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
+
 
     // this code is a colossal DRY violation but because the operations collection is different
     // for cloudResManager and servicesManager and they return different but identical Status objects
@@ -128,7 +127,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
   }
 
   //part 1
-  def createProject(projectName: String, billingAccount: String): Future[Unit] = {
+  def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord] = {
     retryWhen500orGoogleError(() => {
       executeGoogleRequest(cloudResources.projects().create(
         new Project()
@@ -142,8 +141,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
       if (toScalaBool(googleOperation.getDone) && Option(googleOperation.getError).exists(_.getCode == Code.ALREADY_EXISTS)) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"A google project by the name $projectName already exists"))
       }
-      //FIXME: return something useful here (this is a scalar record)
-      //RawlsBillingProjectOperationRecord(projectName.value, CREATE_PROJECT_OPERATION, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)), API_CLOUD_RESOURCE_MANAGER)
+      ActiveOperationRecord(projectName, CreatingProject.toString, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
     })
   }
 
@@ -152,8 +150,12 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     */
   private def toScalaBool(b: java.lang.Boolean) = Option(b).contains(java.lang.Boolean.TRUE)
 
+  private def toErrorMessage(message: String, code: Int): String = {
+    s"${Option(message).getOrElse("")} - code ${code}"
+  }
+
   // part 2
-  def beginProjectSetup(projectName: String, billingAccount: String): Future[Unit] = {
+  def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
 
     val billingManager = billing
     val serviceManager = servicesManager
@@ -172,8 +174,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
       operations <- Future.sequence(services.map { service => retryWhen500orGoogleError(() => {
         executeGoogleRequest(serviceManager.services().enable(service, new EnableServiceRequest().setConsumerId(s"project:${projectName}")))
       }) map { googleOperation =>
-        //FIXME: return something useful here (this is a sequence of operations which must all complete)
-        //RawlsBillingProjectOperationRecord(projectName.value, service, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)), API_SERVICE_MANAGEMENT)
+        ActiveOperationRecord(projectName, EnablingServices.toString, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
       }})
 
     } yield {

@@ -3,8 +3,11 @@ package org.broadinstitute.dsde.workbench.gpalloc.db
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 
-case class ActiveOperationRecord(billingProjectId: Long,
-                                 operation: String)
+case class ActiveOperationRecord(billingProjectName: String,
+                                 operationType: String,
+                                 operationId: String,
+                                 done: Boolean,
+                                 errorMessage: Option[String])
 
 trait ActiveOperationComponent extends GPAllocComponent {
   this: BillingProjectComponent =>
@@ -12,49 +15,40 @@ trait ActiveOperationComponent extends GPAllocComponent {
   import profile.api._
 
   class ActiveOperationTable(tag: Tag) extends Table[ActiveOperationRecord](tag, "ACTIVE_OPERATION") {
-    def billingProjectId =            column[Long]              ("billingProjectId")
-    def operation =                   column[String]            ("operation", O.Length(254))
+    def billingProjectName =          column[String]            ("billingProjectName",  O.Length(254))
+    def operationType =               column[String]            ("operationType",       O.Length(254))
+    def operationId =                 column[String]            ("operationId",         O.Length(254))
+    def done =                        column[Boolean]           ("done")
+    def errorMessage =                column[Option[String]]    ("error_message",       O.Length(1024))
 
-    def fkBillingProject = foreignKey("FK_BILLING_PROJECT", billingProjectId, billingProjectQuery)(_.id)
+    def fkBillingProject = foreignKey("FK_BILLING_PROJECT", billingProjectName, billingProjectQuery)(_.billingProjectName)
 
-    def * = (billingProjectId, operation) <> (ActiveOperationRecord.tupled, ActiveOperationRecord.unapply)
+    def * = (billingProjectName, operationType, operationId, done, errorMessage) <> (ActiveOperationRecord.tupled, ActiveOperationRecord.unapply)
   }
 
   object operationQuery extends TableQuery(new ActiveOperationTable(_)) {
 
-    /*
-    def findBillingProject(billingProject: String) = {
-      billingProjectQuery.filter(_.billingProjectName === billingProject)
+    def findOperations(billingProject: String) = {
+      operationQuery.filter(_.billingProjectName === billingProject)
     }
 
-    def getBillingProject(billingProject: String): DBIO[Option[BillingProjectRecord]] = {
-      findBillingProject(billingProject).result.headOption
+    def saveNewOperations(newOperationRecs: Seq[ActiveOperationRecord]) = {
+      operationQuery ++= newOperationRecs
     }
 
-    def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.BrandNew): DBIO[String] = {
-      (billingProjectQuery returning billingProjectQuery.map(_.id) += BillingProjectRecord(0, billingProject, None, status.toString)) map { _ =>
-        billingProject
+    def getActiveOperationsByType(billingProject: String): DBIO[Map[String, Seq[ActiveOperationRecord]]] = {
+      findOperations(billingProject).filter(!_.done).result map { ops =>
+        ops.groupBy(_.operationType)
       }
     }
 
-    def updateStatus(billingProject: String, status: BillingProjectStatus): DBIO[Unit] = {
-      findBillingProject(billingProject).map(bp => bp.status).update(status.toString).map{ _ => ()}
+    def updateOperations(updatedOps: Seq[ActiveOperationRecord]) = {
+      DBIO.sequence(updatedOps.map { rec =>
+        operationQuery
+          .filter(o => o.billingProjectName === rec.billingProjectName && o.operationId === rec.operationId )
+          .update(rec)
+      })
     }
-
-    def assignPooledBillingProject(owner: String): DBIO[Option[BillingProjectRecord]] = {
-      val freeBillingProject = billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).take(1).forUpdate
-      freeBillingProject.result flatMap { bps: Seq[BillingProjectRecord] =>
-        bps.headOption match {
-          case Some(bp) => freeBillingProject.map(bp => bp.owner).update(Some(owner)) map { _ => Some(bp) }
-          case None => DBIO.successful(None)
-        }
-      }
-    }
-
-    def reclaimProject(billingProject: String): DBIO[Unit] = {
-      findBillingProject(billingProject).map(bp => (bp.owner, bp.status)).update(None, BillingProjectStatus.Unassigned.toString).map { _ => () }
-    }
-    */
 
   }
 }
