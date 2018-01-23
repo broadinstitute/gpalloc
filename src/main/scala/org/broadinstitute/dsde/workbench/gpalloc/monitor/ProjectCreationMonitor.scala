@@ -60,6 +60,7 @@ class ProjectCreationMonitor(projectName: String,
   }
 
   def scheduleNextPoll(status: BillingProjectStatus) = {
+    //FIXME: pollInterval
     context.system.scheduler.scheduleOnce(5 seconds, self, PollForStatus(status))
   }
 
