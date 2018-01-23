@@ -30,16 +30,20 @@ trait BillingProjectComponent extends GPAllocComponent {
       findBillingProject(billingProject).result.headOption
     }
 
-    private def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.BrandNew): DBIO[String] = {
+    def getCreatingProjects: DBIO[Seq[BillingProjectRecord]] = {
+      billingProjectQuery.filter(_.status inSetBind BillingProjectStatus.creatingStatuses.map(_.toString) ).result
+    }
+
+    private def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
       (billingProjectQuery  += BillingProjectRecord(billingProject, None, status.toString)) map { _ =>
         billingProject
       }
     }
 
-    def saveNewProject(billingProject: String, operationRecord: ActiveOperationRecord, status: BillingProjectStatus = BillingProjectStatus.BrandNew): DBIO[String] = {
+    def saveNewProject(billingProject: String, operationRecord: ActiveOperationRecord, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
       DBIO.seq(
-        saveNew(billingProject),
-        operationQuery.saveNewOperation(operationRecord)) map { _ => billingProject }
+        saveNew(billingProject, status),
+        operationQuery.saveNewOperations(Seq(operationRecord))) map { _ => billingProject }
     }
 
     def updateStatus(billingProject: String, status: BillingProjectStatus): DBIO[Unit] = {

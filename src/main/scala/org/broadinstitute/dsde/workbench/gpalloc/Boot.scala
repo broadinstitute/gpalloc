@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.api.{GPAllocRoutes, StandardUse
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.ResumeAllProjects
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -28,10 +29,11 @@ object Boot extends App with LazyLogging {
 
     val dbRef = DbReference.init(config)
     val googleBillingDAO = new HttpGoogleBillingDAO("gpalloc")
+
     val projectCreationSupervisor = system.actorOf(ProjectCreationSupervisor.props("fixme-billing-account", dbRef, googleBillingDAO))
+    projectCreationSupervisor ! ResumeAllProjects
 
     val gpAllocService = new GPAllocService(dbRef, projectCreationSupervisor, googleBillingDAO)
-
     val gpallocRoutes = new GPAllocRoutes(gpAllocService) with StandardUserInfoDirectives
 
       Http().bindAndHandle(gpallocRoutes.route, "0.0.0.0", 8080)

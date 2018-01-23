@@ -5,7 +5,6 @@ import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.model.GPAllocException
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
 import org.broadinstitute.dsde.workbench.model.UserInfo
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
