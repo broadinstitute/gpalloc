@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc
 
-import org.broadinstitute.dsde.workbench.gpalloc.db.BillingProjectRecord
+import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, BillingProjectRecord}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.scalatest.concurrent.ScalaFutures
@@ -12,5 +12,9 @@ trait CommonTestData { this: ScalaFutures =>
 
   def freshBillingProjectRecord(projectName: String) = {
     BillingProjectRecord(projectName, None, BillingProjectStatus.CreatingProject.toString)
+  }
+
+  def freshOpRecord(projectName: String) = {
+    ActiveOperationRecord(projectName, BillingProjectStatus.CreatingProject.toString, "opid-123456", done = false, None)
   }
 }

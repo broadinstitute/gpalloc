@@ -54,7 +54,10 @@ trait BillingProjectComponent extends GPAllocComponent {
       val freeBillingProject = billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).take(1).forUpdate
       freeBillingProject.result flatMap { bps: Seq[BillingProjectRecord] =>
         bps.headOption match {
-          case Some(bp) => findBillingProject(bp.billingProjectName).map(_.owner).update(Some(owner)) map { _ => Some(bp.billingProjectName) }
+          case Some(bp) =>
+            findBillingProject(bp.billingProjectName)
+              .map(b => (b.owner, b.status))
+              .update(Some(owner), BillingProjectStatus.Assigned.toString) map { _ => Some(bp.billingProjectName) }
           case None => DBIO.successful(None)
         }
       }
@@ -64,8 +67,12 @@ trait BillingProjectComponent extends GPAllocComponent {
       billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).length.result
     }
 
-    def releaseProject(billingProject: String): DBIO[Unit] = {
-      findBillingProject(billingProject).map(bp => (bp.owner, bp.status)).update(None, BillingProjectStatus.Unassigned.toString).map { _ => () }
+    //Does nothing if your project isn't in Assigned.
+    def releaseProject(billingProject: String): DBIO[Int] = {
+      findBillingProject(billingProject)
+        .filter(_.status === BillingProjectStatus.Assigned.toString)
+        .map(bp => (bp.owner, bp.status))
+        .update(None, BillingProjectStatus.Unassigned.toString)
     }
 
   }
