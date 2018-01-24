@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.gpalloc.model
 
+import scala.language.implicitConversions
+
 object BillingProjectStatus extends Enumeration {
   type BillingProjectStatus = Value
   val CreatingProject, EnablingServices, Unassigned, Assigned, Deleted = Value
