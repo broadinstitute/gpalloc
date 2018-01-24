@@ -32,6 +32,10 @@ trait ActiveOperationComponent extends GPAllocComponent {
       operationQuery.filter(_.billingProjectName === billingProject)
     }
 
+    def getOperations(billingProject: String) = {
+      findOperations(billingProject).result
+    }
+
     def saveNewOperations(newOperationRecs: Seq[ActiveOperationRecord]) = {
       operationQuery ++= newOperationRecs
     }
