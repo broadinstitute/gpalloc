@@ -60,6 +60,10 @@ trait BillingProjectComponent extends GPAllocComponent {
       }
     }
 
+    def countUnassignedProjects: DBIO[Int] = {
+      billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).length.result
+    }
+
     def releaseProject(billingProject: String): DBIO[Unit] = {
       findBillingProject(billingProject).map(bp => (bp.owner, bp.status)).update(None, BillingProjectStatus.Unassigned.toString).map { _ => () }
     }

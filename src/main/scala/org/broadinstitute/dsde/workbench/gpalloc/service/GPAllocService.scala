@@ -27,13 +27,12 @@ class GPAllocService(protected val dbRef: DbReference,
                     (implicit val executionContext: ExecutionContext) {
 
   def requestGoogleProject(userInfo: UserInfo): Future[String] = {
-    dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
-      case Some(project) =>
-        googleBillingDAO.transferProjectOwnership(project.billingProjectName, userInfo.userEmail.value)
-      case None =>
-        createNewGoogleProject() //Create one for the next person who asks
-        throw NoGoogleProjectAvailable()
+    val newProject = dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
+      case Some(project) => googleBillingDAO.transferProjectOwnership(project.billingProjectName, userInfo.userEmail.value)
+      case None => throw NoGoogleProjectAvailable()
     }
+    newProject onComplete { _ => maybeCreateNewProject() }
+    newProject
   }
 
   def releaseGoogleProject(userInfo: UserInfo, project: String): Future[Unit] = {
@@ -53,7 +52,7 @@ class GPAllocService(protected val dbRef: DbReference,
         //onComplete will return the original future, i.e. authCheck, and not wait for onComplete to complete.
         //we're kicking off this work but not monitoring it.
         for {
-          _ <- googleBillingDAO.scrubBillingProject(userInfo, project)
+          _ <- googleBillingDAO.scrubBillingProject(project)
           _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
         } yield {
           ()
@@ -63,7 +62,15 @@ class GPAllocService(protected val dbRef: DbReference,
     authCheck
   }
 
-  def createNewGoogleProject(): Unit = {
+  //create new google project if we don't have any available
+  private def maybeCreateNewProject(): Unit = {
+    dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedProjects } map {
+      case 0 => createNewGoogleProject()
+      case _ => //do nothing
+    }
+  }
+
+  private def createNewGoogleProject(): Unit = {
     projectCreationSupervisor ! CreateProject(s"gpalloc-${Random.alphanumeric.take(7).mkString}")
   }
 }
