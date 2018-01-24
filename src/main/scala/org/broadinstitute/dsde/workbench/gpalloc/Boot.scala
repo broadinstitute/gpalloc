@@ -1,9 +1,13 @@
 package org.broadinstitute.dsde.workbench.gpalloc
 
 
+import java.io.StringReader
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
+import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets
+import com.google.api.client.json.jackson2.JacksonFactory
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
@@ -20,15 +24,20 @@ object Boot extends App with LazyLogging {
 
   private def startup(): Unit = {
 
-    val config = ConfigFactory.load()
+    val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("gpalloc")
     implicit val materializer = ActorMaterializer()
     import scala.concurrent.ExecutionContext.Implicits.global
 
+    val gcsConfig = config.getConfig("gcs")
+
     val dbRef = DbReference.init(config)
-    val googleBillingDAO = new HttpGoogleBillingDAO("gpalloc")
+
+    val jsonFactory = JacksonFactory.getDefaultInstance
+    val clientSecrets = GoogleClientSecrets.load(jsonFactory, new StringReader(gcsConfig.getString("secrets")))
+    val googleBillingDAO = new HttpGoogleBillingDAO("gpalloc", clientSecrets, gcsConfig.getString("pathToPem"))
 
     val projectCreationSupervisor = system.actorOf(ProjectCreationSupervisor.props("fixme-billing-account", dbRef, googleBillingDAO))
     projectCreationSupervisor ! ResumeAllProjects

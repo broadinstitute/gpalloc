@@ -6,8 +6,8 @@ import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object ProjectCreationSupervisor {
   sealed trait ProjectCreationSupervisorMessage

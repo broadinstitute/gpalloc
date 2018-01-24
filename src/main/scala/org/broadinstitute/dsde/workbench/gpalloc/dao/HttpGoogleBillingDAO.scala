@@ -3,43 +3,52 @@ package org.broadinstitute.dsde.workbench.gpalloc.dao
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
+import com.google.api.client.googleapis.auth.oauth2.{GoogleClientSecrets, GoogleCredential}
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
 import com.google.api.client.http.HttpResponseException
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.admin.directory.DirectoryScopes
-import org.broadinstitute.dsde.workbench.google.GoogleUtilities
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, UserInfo, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import com.google.api.services.cloudbilling.Cloudbilling
 import com.google.api.services.cloudbilling.model.ProjectBillingInfo
 import com.google.api.services.cloudresourcemanager.CloudResourceManager
-import com.google.api.services.cloudresourcemanager.model.{Binding, Policy, Project, SetIamPolicyRequest}
-import com.google.api.services.compute.{Compute, ComputeScopes}
+import com.google.api.services.cloudresourcemanager.model.{Policy, Project, SetIamPolicyRequest}
 import com.google.api.services.compute.model.UsageExportLocation
+import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.genomics.GenomicsScopes
 import com.google.api.services.iam.v1.Iam
-import com.google.api.services.iam.v1.model.{ListServiceAccountKeysResponse, ServiceAccount, ServiceAccountKey}
+import com.google.api.services.iam.v1.model.{ServiceAccount, ServiceAccountKey}
 import com.google.api.services.plus.PlusScopes
 import com.google.api.services.servicemanagement.ServiceManagement
 import com.google.api.services.servicemanagement.model.EnableServiceRequest
-import com.google.api.services.storage.{Storage, StorageScopes}
-import com.google.api.services.storage.model.{Bucket, BucketAccessControl, ObjectAccessControl}
 import com.google.api.services.storage.model.Bucket.Lifecycle
 import com.google.api.services.storage.model.Bucket.Lifecycle.Rule.{Action, Condition}
+import com.google.api.services.storage.model.{Bucket, BucketAccessControl, ObjectAccessControl}
+import com.google.api.services.storage.{Storage, StorageScopes}
 import io.grpc.Status.Code
+import org.broadinstitute.dsde.workbench.google.GoogleUtilities
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
-import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
+import org.broadinstitute.dsde.workbench.gpalloc.model.{BillingProjectStatus, GPAllocException}
+import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
+import scala.concurrent.{ExecutionContext, Future}
 
-class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serviceAccountPemFile: String)
-                           (implicit val system: ActorSystem, val executionContext: ExecutionContext) extends GoogleUtilities {
+class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, serviceAccountPemFile: String)
+                           (implicit val system: ActorSystem, val executionContext: ExecutionContext)
+  extends GoogleUtilities {
 
   protected val workbenchMetricBaseName = "billing"
+  implicit val service = GoogleInstrumentedService.Iam
+
+  implicit val counters = googleCounters(service)
+  implicit val histo = googleRetryHistogram(service)
+
+  implicit val errorReportSource = ErrorReportSource("gpalloc-google")
+
+  val serviceAccountClientId: String = clientSecrets.getDetails.get("client_email").toString
 
   lazy val httpTransport = GoogleNetHttpTransport.newTrustedTransport
   lazy val jsonFactory = JacksonFactory.getDefaultInstance
@@ -137,6 +146,9 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     }
   }
 
+  case class GoogleProjectConflict(projectName: String)
+    extends GPAllocException(s"A google project by the name $projectName already exists", StatusCodes.Conflict)
+
   //part 1
   def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord] = {
     retryWhen500orGoogleError(() => {
@@ -147,9 +159,9 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
           .setLabels(Map("billingaccount" -> billingAccount).asJava)))
     }).recover {
       case t: HttpResponseException if StatusCode.int2StatusCode(t.getStatusCode) == StatusCodes.Conflict =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"A google project by the name $projectName already exists"))
+        throw GoogleProjectConflict(projectName)
     } map ( googleOperation => {
-      if (toScalaBool(googleOperation.getDone) && Option(googleOperation.getError).exists(_.getCode == Code.ALREADY_EXISTS)) {
+      if (toScalaBool(googleOperation.getDone) && Option(googleOperation.getError).exists(_.getCode == Code.ALREADY_EXISTS.value())) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"A google project by the name $projectName already exists"))
       }
       ActiveOperationRecord(projectName, CreatingProject.toString, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
