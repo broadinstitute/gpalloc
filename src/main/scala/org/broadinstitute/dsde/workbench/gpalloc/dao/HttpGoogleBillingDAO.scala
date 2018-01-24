@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
+import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
 import com.google.api.client.http.HttpResponseException
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.admin.directory.DirectoryScopes
@@ -18,6 +19,8 @@ import com.google.api.services.cloudresourcemanager.model.{Binding, Policy, Proj
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.genomics.GenomicsScopes
+import com.google.api.services.iam.v1.Iam
+import com.google.api.services.iam.v1.model.{ListServiceAccountKeysResponse, ServiceAccount, ServiceAccountKey}
 import com.google.api.services.plus.PlusScopes
 import com.google.api.services.servicemanagement.ServiceManagement
 import com.google.api.services.servicemanagement.model.EnableServiceRequest
@@ -81,6 +84,10 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     new Storage.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
+  def iam: Iam = {
+    new Iam.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
+  }
+
   def transferProjectOwnership(project: String, owner: String): Future[String] = {
     /* NOTE: There is no work to be done here. It is up to the caller, inside their own FC stack to:
      * - set up IAM policies in a manner similar to Rawls' addPolicyBindings
@@ -89,15 +96,22 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     Future.successful(project)
   }
 
-  def scrubBillingProject(userInfo: UserInfo, project: String): Future[Unit] = {
-    billing
-    /* TODO: clean up all the things
-     * The things are:
-     * - IAM policies
-     * - permissions on the Cromwell auth bucket
-     * - keys for pet SAs, but not the pets themselves
-     */
-    Future.successful(())
+  def scrubBillingProject(projectName: String): Future[Unit] = {
+    //start these early so they're async
+    val cleanupPolicyF = retryWhen500orGoogleError(() => {
+      val policyRequest = new SetIamPolicyRequest().setPolicy(new Policy().setBindings(null))
+      executeGoogleRequest(cloudResources.projects().setIamPolicy(projectName, policyRequest))
+    })
+    val cleanupSAKeysF = cleanupPetSAKeys(projectName)
+
+    for {
+      project <- getGoogleProject(projectName)
+      _ <- removePermissionsFromCromwellAuthBucket(projectName, project.getProjectNumber)
+      _ <- cleanupPolicyF
+      _ <- cleanupSAKeysF
+    } yield {
+      //nah
+    }
   }
 
   //poll google for what's going on
@@ -214,8 +228,14 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     })
   }
 
+  def googleRq[T](op: AbstractGoogleClientRequest[T]) = {
+    retryWhen500orGoogleError(() => executeGoogleRequest(op))
+  }
+
+  def cromwellAuthBucketName(bpName: String) = s"cromwell-auth-$bpName"
+
   def createCromwellAuthBucket(billingProjectName: String, projectNumber: Long): Future[String] = {
-    val bucketName = s"cromwell-auth-$billingProjectName"
+    val bucketName = cromwellAuthBucketName(billingProjectName)
     retryWithRecoverWhen500orGoogleError(
       () => {
         val bucketAcls = List(new BucketAccessControl().setEntity("project-editors-" + projectNumber).setRole("OWNER"), new BucketAccessControl().setEntity("project-owners-" + projectNumber).setRole("OWNER")).asJava
@@ -226,6 +246,54 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
 
         bucketName
       }) { case t: HttpResponseException if t.getStatusCode == 409 => bucketName }
+  }
+
+  def removePermissionsFromCromwellAuthBucket(billingProjectName: String, projectNumber: Long): Future[Unit] = {
+    val bucketName = cromwellAuthBucketName(billingProjectName)
+    for {
+      _ <- googleRq(storage.defaultObjectAccessControls.delete(bucketName, "project-editors-" + projectNumber))
+      _ <- googleRq(storage.defaultObjectAccessControls.delete(bucketName, "project-owners-" + projectNumber))
+      _ <- googleRq(storage.bucketAccessControls.delete(bucketName, "project-editors-" + projectNumber))
+      _ <- googleRq(storage.bucketAccessControls.delete(bucketName, "project-owners-" + projectNumber))
+    } yield {
+      //nah
+    }
+  }
+
+  //dear god, google. surely there's a better way
+  def gProjectPath(project: String) = s"projects/$project"
+  def gSAPath(project: String, serviceAccountEmail: String) = gProjectPath(project) + s"/serviceAccounts/$serviceAccountEmail"
+  def gKeyPath(project: String, serviceAccountEmail: String, keyEmail: String) = gSAPath(project, serviceAccountEmail) + s"/keys/$keyEmail"
+
+  def cleanupPetSAKeys(projectName: String): Future[Unit] = {
+    for {
+      serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
+      pets = serviceAccounts.getAccounts.asScala.filter(_.getEmail.startsWith("pet-"))
+      _ <- removeKeysForPets(projectName, pets)
+    } yield {
+      //nah
+    }
+  }
+
+  def removeKeysForPets(projectName: String, pets: Seq[ServiceAccount]): Future[Unit] = {
+    Future.traverse(pets){ pet => //these run in parallel
+      for {
+        petKeys <- googleRq(iam.projects.serviceAccounts.keys.list(gSAPath(projectName, pet.getEmail)))
+        _ <- removeKeysForPet(projectName, pet.getEmail, petKeys.getKeys.asScala)
+      } yield {
+        //nah
+      }
+    }.mapTo[Unit]
+  }
+
+  def removeKeysForPet(projectName: String, petEmail: String, petKeys: Seq[ServiceAccountKey]): Future[Unit] = {
+    Future.traverse(petKeys){ petKey => //these run in parallel
+      for {
+        _ <- googleRq(iam.projects.serviceAccounts.keys.delete(gKeyPath(projectName, petEmail, petKey.getName)))
+      } yield {
+        //nah
+      }
+    }.mapTo[Unit]
   }
 
   def createStorageLogsBucket(billingProjectName: String): Future[String] = {
