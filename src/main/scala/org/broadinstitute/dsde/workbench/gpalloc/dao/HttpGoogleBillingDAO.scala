@@ -100,7 +100,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountClientId: String, serv
     //start these early so they're async
     val cleanupPolicyF = retryWhen500orGoogleError(() => {
       val policyRequest = new SetIamPolicyRequest().setPolicy(new Policy().setBindings(null))
-      executeGoogleRequest(cloudResources.projects().setIamPolicy(projectName, policyRequest))
+      googleRq(cloudResources.projects().setIamPolicy(projectName, policyRequest))
     })
     val cleanupSAKeysF = cleanupPetSAKeys(projectName)
 
