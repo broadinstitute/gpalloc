@@ -27,7 +27,7 @@ class GPAllocService(protected val dbRef: DbReference,
 
   def requestGoogleProject(userInfo: UserInfo): Future[String] = {
     val newProject = dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
-      case Some(project) => googleBillingDAO.transferProjectOwnership(project.billingProjectName, userInfo.userEmail.value)
+      case Some(projectName) => googleBillingDAO.transferProjectOwnership(projectName, userInfo.userEmail.value)
       case None => throw NoGoogleProjectAvailable()
     }
     newProject onComplete { _ => maybeCreateNewProject() }
