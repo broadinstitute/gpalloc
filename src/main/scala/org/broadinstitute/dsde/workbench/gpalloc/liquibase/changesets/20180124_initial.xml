@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="gpalloc" xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+    <changeSet logicalFilePath="gpalloc" author="hussein" id="billingproject">
+        <createTable tableName="BILLING_PROJECT">
+            <column name="billingProjectName" type="VARCHAR(254)">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="owner" type="VARCHAR(254)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="status" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="gpalloc" author="hussein" id="activeoperation">
+        <createTable tableName="ACTIVE_OPERATION">
+            <column name="billingProjectName" type="VARCHAR(254)">
+            </column>
+            <column name="operationType" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="operationId" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="done" type="BIT(1)" defaultValue="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="errorMessage" type="VARCHAR(1024)">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+        <createIndex indexName="FK_BILLING_PROJECT" tableName="BILLING_PROJECT">
+            <column name="billingProjectName"/>
+        </createIndex>
+        <addForeignKeyConstraint
+                baseColumnNames="billingProjectName"
+                baseTableName="ACTIVE_OPERATION"
+                constraintName="FK_BILLING_PROJECT"
+                deferrable="false"
+                initiallyDeferred="false"
+                onDelete="NO ACTION"
+                onUpdate="NO ACTION"
+                referencedColumnNames="billingProjectName"
+                referencedTableName="BILLING_PROJECT"/>
+    </changeSet>
+</databaseChangeLog>

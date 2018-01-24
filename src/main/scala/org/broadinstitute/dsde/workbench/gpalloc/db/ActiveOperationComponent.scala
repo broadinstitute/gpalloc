@@ -19,7 +19,7 @@ trait ActiveOperationComponent extends GPAllocComponent {
     def operationType =               column[String]            ("operationType",       O.Length(254))
     def operationId =                 column[String]            ("operationId",         O.Length(254))
     def done =                        column[Boolean]           ("done")
-    def errorMessage =                column[Option[String]]    ("error_message",       O.Length(1024))
+    def errorMessage =                column[Option[String]]    ("errorMessage",       O.Length(1024))
 
     def fkBillingProject = foreignKey("FK_BILLING_PROJECT", billingProjectName, billingProjectQuery)(_.billingProjectName)
 
