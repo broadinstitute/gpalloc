@@ -1,5 +1,6 @@
-# GPAlloc
-Allocates and manages Google projects
+# allo, gator
+
+Makes creating billing projects snappy
 
 ## Project Status 
 This project is under active development. It is not yet ready for deployment.
