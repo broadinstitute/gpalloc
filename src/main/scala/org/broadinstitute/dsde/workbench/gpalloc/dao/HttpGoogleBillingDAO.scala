@@ -99,8 +99,8 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
 
   def transferProjectOwnership(project: String, owner: String): Future[String] = {
     /* NOTE: There is no work to be done here. It is up to the caller, inside their own FC stack to:
-     * - set up IAM policies in a manner similar to Rawls' addPolicyBindings
-     * - set up permissions on the Cromwell auth bucket
+     * - add the project to the rawls db
+     * - tell sam about the resource
      */
     Future.successful(project)
   }
@@ -162,7 +162,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
         throw GoogleProjectConflict(projectName)
     } map ( googleOperation => {
       if (toScalaBool(googleOperation.getDone) && Option(googleOperation.getError).exists(_.getCode == Code.ALREADY_EXISTS.value())) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"A google project by the name $projectName already exists"))
+        throw GoogleProjectConflict(projectName)
       }
       ActiveOperationRecord(projectName, CreatingProject.toString, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
     })

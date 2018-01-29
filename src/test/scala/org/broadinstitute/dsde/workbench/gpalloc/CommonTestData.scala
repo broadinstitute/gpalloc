@@ -5,6 +5,8 @@ import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.scalatest.concurrent.ScalaFutures
 
+import scala.util.Random
+
 trait CommonTestData { this: ScalaFutures =>
   val newProjectName = "new-test-project"
   val newProjectName2 = "new-test-project2"
@@ -15,6 +17,7 @@ trait CommonTestData { this: ScalaFutures =>
   }
 
   def freshOpRecord(projectName: String) = {
-    ActiveOperationRecord(projectName, BillingProjectStatus.CreatingProject.toString, "opid-123456", done = false, None)
+    val random = Random.alphanumeric.take(5).mkString
+    ActiveOperationRecord(projectName, BillingProjectStatus.CreatingProject.toString, s"opid-$random", done = false, None)
   }
 }

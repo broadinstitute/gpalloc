@@ -37,7 +37,7 @@ trait ActiveOperationComponent extends GPAllocComponent {
     }
 
     def saveNewOperations(newOperationRecs: Seq[ActiveOperationRecord]) = {
-      operationQuery ++= newOperationRecs
+      (operationQuery ++= newOperationRecs) map { _ => newOperationRecs }
     }
 
     def getActiveOperationsByType(billingProject: String): DBIO[Map[String, Seq[ActiveOperationRecord]]] = {
