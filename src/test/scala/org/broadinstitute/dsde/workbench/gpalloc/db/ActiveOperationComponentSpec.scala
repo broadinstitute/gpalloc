@@ -30,5 +30,10 @@ class ActiveOperationComponentSpec extends TestComponent with FlatSpecLike with 
 
     //FK violate if no related bproj
     dbFailure { _.operationQuery.saveNewOperations(Seq(freshOpRecord(newProjectName2))) } shouldBe a [java.sql.BatchUpdateException]
+
+    //update
+    val updatedOp = newOps.last.copy(operationType = BillingProjectStatus.Unassigned.toString)
+    dbFutureValue { _.operationQuery.updateOperations(Seq(updatedOp)) }
+    dbFutureValue { _.operationQuery.getOperations(newProjectName)} should contain theSameElementsAs newOps.take(2) ++ Seq(updatedOp)
   }
 }
