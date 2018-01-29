@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, Cancellable, Props}
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
@@ -44,7 +44,7 @@ class ProjectCreationMonitor(projectName: String,
 
   import context._
 
-  override def receive = {
+  override def receive: PartialFunction[Any, Unit] = {
     case WakeUp =>
       resumeInflightProject pipeTo self
     case CreateProject =>
@@ -61,7 +61,7 @@ class ProjectCreationMonitor(projectName: String,
     case Success => stop(self)
   }
 
-  def scheduleNextPoll(status: BillingProjectStatus) = {
+  def scheduleNextPoll(status: BillingProjectStatus): Unit = {
     context.system.scheduler.scheduleOnce(pollInterval, self, PollForStatus(status))
   }
 

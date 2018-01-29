@@ -10,7 +10,7 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
   import profile._
 
 
-  "BillingProjectComponent" should "list, save, get, and delete" in isolatedDbTest {
+  "BillingProjectComponent" should "list, save, get, and update" in isolatedDbTest {
     //nothing
     dbFutureValue { _.billingProjectQuery.getCreatingProjects } shouldEqual Seq()
 

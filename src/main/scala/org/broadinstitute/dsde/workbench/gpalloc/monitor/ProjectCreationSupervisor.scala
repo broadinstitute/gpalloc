@@ -6,6 +6,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
@@ -28,7 +29,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   import context._
 
-  override def receive = {
+  override def receive: PartialFunction[Any, Unit] = {
     case CreateProject(projectName) =>
       createProject(projectName)
     case ResumeAllProjects =>
@@ -36,12 +37,12 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   }
 
   //if a project creation monitor dies, give up on it
-  override val supervisorStrategy = SupervisorStrategy.stoppingStrategy
+  override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
 
   val monitorNameBase = "bpmon-"
   def monitorName(bp: String) = s"${monitorNameBase}bp"
 
-  def resumeAllProjects = {
+  def resumeAllProjects: Future[Unit] = {
     dbRef.inTransaction { da => da.billingProjectQuery.getCreatingProjects } map { _.foreach { bp =>
       val newProjectMonitor = context.actorOf(ProjectCreationMonitor.props(bp.billingProjectName, billingAccount, dbRef, googleDAO, pollInterval), monitorName(bp.billingProjectName))
       newProjectMonitor ! ProjectCreationMonitor.WakeUp
@@ -54,7 +55,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   }
 
   //TODO: hook this up. drop the database, optionally delete the projects
-  def stopMonitoringEverything: Unit = {
+  def stopMonitoringEverything(): Unit = {
     system.actorSelection(s"/user/${monitorNameBase}*") ! PoisonPill
   }
 }

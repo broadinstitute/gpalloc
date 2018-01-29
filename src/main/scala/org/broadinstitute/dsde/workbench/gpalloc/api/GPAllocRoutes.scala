@@ -26,7 +26,7 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val sy
   extends LazyLogging
     with UserInfoDirectives {
 
-  def unauthedRoutes: Route =
+  lazy val unauthedRoutes: Route =
     path("ping") {
       pathEndOrSingleSlash {
         get {
@@ -37,7 +37,7 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val sy
       }
     }
 
-  def gpAllocRoutes: Route =
+  lazy val gpAllocRoutes: Route =
     requireUserInfo { userInfo =>
 
       path("googleproject") {
