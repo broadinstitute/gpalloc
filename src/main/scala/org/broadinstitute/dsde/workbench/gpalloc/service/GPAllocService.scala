@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.service
 
 import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
+import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.model.GPAllocException
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
@@ -22,7 +22,8 @@ case class GoogleProjectNotFound(project: String)
 
 class GPAllocService(protected val dbRef: DbReference,
                      projectCreationSupervisor: ActorRef,
-                     googleBillingDAO: HttpGoogleBillingDAO)
+                     googleBillingDAO: GoogleDAO,
+                     projectCreationThreshold: Int)
                     (implicit val executionContext: ExecutionContext) {
 
   def requestGoogleProject(userInfo: UserInfo): Future[String] = {
@@ -64,7 +65,7 @@ class GPAllocService(protected val dbRef: DbReference,
   //create new google project if we don't have any available
   private def maybeCreateNewProject(): Unit = {
     dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedProjects } map {
-      case 0 => createNewGoogleProject()
+      case count if count <= projectCreationThreshold => createNewGoogleProject()
       case _ => //do nothing
     }
   }

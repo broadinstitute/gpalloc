@@ -38,7 +38,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, serviceAccountPemFile: String)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
-  extends GoogleUtilities {
+  extends GoogleDAO with GoogleUtilities {
 
   protected val workbenchMetricBaseName = "billing"
   implicit val service = GoogleInstrumentedService.Iam
@@ -97,7 +97,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
     new Iam.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
-  def transferProjectOwnership(project: String, owner: String): Future[String] = {
+  override def transferProjectOwnership(project: String, owner: String): Future[String] = {
     /* NOTE: There is no work to be done here. It is up to the caller, inside their own FC stack to:
      * - add the project to the rawls db
      * - tell sam about the resource
@@ -105,7 +105,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
     Future.successful(project)
   }
 
-  def scrubBillingProject(projectName: String): Future[Unit] = {
+  override def scrubBillingProject(projectName: String): Future[Unit] = {
     //start these early so they're async
     val cleanupPolicyF = retryWhen500orGoogleError(() => {
       val policyRequest = new SetIamPolicyRequest().setPolicy(new Policy().setBindings(null))
@@ -124,7 +124,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
   }
 
   //poll google for what's going on
-  def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
+  override def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
 
     // this code is a colossal DRY violation but because the operations collection is different
     // for cloudResManager and servicesManager and they return different but identical Status objects
@@ -150,7 +150,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
     extends GPAllocException(s"A google project by the name $projectName already exists", StatusCodes.Conflict)
 
   //part 1
-  def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord] = {
+  override def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord] = {
     retryWhen500orGoogleError(() => {
       executeGoogleRequest(cloudResources.projects().create(
         new Project()
@@ -178,7 +178,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
   }
 
   // part 2
-  def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
+  override def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
 
     val billingManager = billing
     val serviceManager = servicesManager
@@ -206,7 +206,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
   }
 
   //part 3
-  def setupProjectBucketAccess(projectName: String): Future[Unit] = {
+  override def setupProjectBucketAccess(projectName: String): Future[Unit] = {
     val usageBucketName = s"${projectName}-usage-export"
 
     // all of these things should be idempotent
