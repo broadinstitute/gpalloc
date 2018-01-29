@@ -1,2 +1,2 @@
 # gpalloc
-Allocates Google projects
+Allocates and manages Google projects
