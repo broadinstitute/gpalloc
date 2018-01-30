@@ -3,8 +3,6 @@ package org.broadinstitute.dsde.workbench.gpalloc.api
 import akka.actor.ActorSystem
 import akka.event.Logging.LogLevel
 import akka.event.{Logging, LoggingAdapter}
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import SprayJsonSupport._
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server._
@@ -12,12 +10,13 @@ import akka.http.scaladsl.server.RouteResult.Complete
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, LoggingMagnet}
 import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.gpalloc.errorReportSource
+import org.broadinstitute.dsde.workbench.gpalloc.model.GPAllocJsonSupport._
+import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.gpalloc.model.GPAllocException
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.gpalloc.service._
 
 import scala.concurrent.{ExecutionContext, Future}

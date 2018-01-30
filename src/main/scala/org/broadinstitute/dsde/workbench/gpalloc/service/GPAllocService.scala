@@ -4,7 +4,7 @@ import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
-import org.broadinstitute.dsde.workbench.gpalloc.model.GPAllocException
+import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
 import org.broadinstitute.dsde.workbench.model.UserInfo
 
@@ -26,7 +26,7 @@ class GPAllocService(protected val dbRef: DbReference,
                      projectCreationThreshold: Int)
                     (implicit val executionContext: ExecutionContext) {
 
-  def requestGoogleProject(userInfo: UserInfo): Future[String] = {
+  def requestGoogleProject(userInfo: UserInfo): Future[AssignedProject] = {
     val newProject = dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
       case Some(projectName) => googleBillingDAO.transferProjectOwnership(projectName, userInfo.userEmail.value)
       case None => throw NoGoogleProjectAvailable()

@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, BillingProjectRecord, DbReference, DbSingleton}
-import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
+import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus}
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.util.NoopActor
@@ -23,12 +23,16 @@ trait CommonTestData { this: ScalaFutures =>
 
   val dbRef = DbSingleton.ref
 
-  def freshBillingProjectRecord(projectName: String) = {
+  def freshBillingProjectRecord(projectName: String): BillingProjectRecord = {
     BillingProjectRecord(projectName, None, BillingProjectStatus.CreatingProject.toString)
   }
 
-  def freshOpRecord(projectName: String) = {
+  def freshOpRecord(projectName: String): ActiveOperationRecord = {
     val random = Random.alphanumeric.take(5).mkString
     ActiveOperationRecord(projectName, BillingProjectStatus.CreatingProject.toString, s"opid-$random", done = false, None)
+  }
+
+  def toAssignedProject(projectName: String): AssignedProject = {
+    AssignedProject(projectName,s"cromwell-bucket-$projectName")
   }
 }
