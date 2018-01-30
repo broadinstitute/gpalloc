@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
 import akka.actor.{Actor, PoisonPill, Props, SupervisorStrategy}
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
+import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 
@@ -16,13 +16,13 @@ object ProjectCreationSupervisor {
 
   def props(billingAccount: String,
             dbRef: DbReference,
-            googleDAO: HttpGoogleBillingDAO,
+            googleDAO: GoogleDAO,
             pollInterval: FiniteDuration = 1 minutes): Props = {
     Props(new ProjectCreationSupervisor(billingAccount, dbRef, googleDAO, pollInterval))
   }
 }
 
-class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, googleDAO: HttpGoogleBillingDAO, pollInterval: FiniteDuration)
+class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, googleDAO: GoogleDAO, pollInterval: FiniteDuration)
   extends Actor
   with LazyLogging {
 

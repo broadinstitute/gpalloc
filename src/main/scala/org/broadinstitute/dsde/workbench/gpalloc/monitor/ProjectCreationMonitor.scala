@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.monitor
 import akka.actor.{Actor, Cancellable, Props}
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
+import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, DataAccess, DbReference}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
@@ -28,7 +28,7 @@ object ProjectCreationMonitor {
   def props(projectName: String,
             billingAccount: String,
             dbRef: DbReference,
-            googleDAO: HttpGoogleBillingDAO,
+            googleDAO: GoogleDAO,
             pollInterval: FiniteDuration): Props = {
     Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, pollInterval))
   }
@@ -37,7 +37,7 @@ object ProjectCreationMonitor {
 class ProjectCreationMonitor(projectName: String,
                              billingAccount: String,
                              dbRef: DbReference,
-                             googleDAO: HttpGoogleBillingDAO,
+                             googleDAO: GoogleDAO,
                              pollInterval: FiniteDuration)
   extends Actor
   with LazyLogging {
