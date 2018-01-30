@@ -1,5 +1,8 @@
 package org.broadinstitute.dsde.workbench.gpalloc.model
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import spray.json.DefaultJsonProtocol
+
 import scala.language.implicitConversions
 
 object BillingProjectStatus extends Enumeration {
@@ -18,4 +21,10 @@ object BillingProjectStatus extends Enumeration {
   def withNameIgnoreCase(str: String): BillingProjectStatus = {
     values.find(_.toString.equalsIgnoreCase(str)).getOrElse(throw new IllegalArgumentException(s"Unknown cluster status: $str"))
   }
+}
+
+case class AssignedProject(projectName: String, cromwellAuthBucketUrl: String)
+
+object GPAllocJsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+  implicit val assignedProjectFormat = jsonFormat2(AssignedProject.apply)
 }

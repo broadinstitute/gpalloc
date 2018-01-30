@@ -29,7 +29,7 @@ import io.grpc.Status.Code
 import org.broadinstitute.dsde.workbench.google.GoogleUtilities
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
-import org.broadinstitute.dsde.workbench.gpalloc.model.{BillingProjectStatus, GPAllocException}
+import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus, GPAllocException}
 import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
 
@@ -97,12 +97,12 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
     new Iam.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
-  override def transferProjectOwnership(project: String, owner: String): Future[String] = {
+  override def transferProjectOwnership(project: String, owner: String): Future[AssignedProject] = {
     /* NOTE: There is no work to be done here. It is up to the caller, inside their own FC stack to:
      * - add the project to the rawls db
      * - tell sam about the resource
      */
-    Future.successful(project)
+    Future.successful(AssignedProject(project, cromwellAuthBucketName(project)))
   }
 
   override def scrubBillingProject(projectName: String): Future[Unit] = {

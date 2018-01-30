@@ -1,11 +1,12 @@
 package org.broadinstitute.dsde.workbench.gpalloc.dao
 
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
+import org.broadinstitute.dsde.workbench.gpalloc.model.AssignedProject
 
 import scala.concurrent.Future
 
 abstract class GoogleDAO {
-  def transferProjectOwnership(project: String, owner: String): Future[String]
+  def transferProjectOwnership(project: String, owner: String): Future[AssignedProject]
   def scrubBillingProject(projectName: String): Future[Unit]
 
   def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord]

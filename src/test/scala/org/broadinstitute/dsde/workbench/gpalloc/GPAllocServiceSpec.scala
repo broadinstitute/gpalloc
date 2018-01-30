@@ -33,7 +33,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     val (gpAlloc, probe) = gpAllocService(dbRef, 0)
 
     val assignedProject = gpAlloc.requestGoogleProject(userInfo).futureValue
-    assignedProject shouldEqual newProjectName
+    assignedProject shouldEqual toAssignedProject(newProjectName)
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
@@ -69,7 +69,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     val (gpAlloc, probe) = gpAllocService(dbRef, 0)
 
     val assignedProject = gpAlloc.requestGoogleProject(userInfo).futureValue
-    Seq(newProjectName, newProjectName2) should contain(assignedProject)
+    Seq(toAssignedProject(newProjectName), toAssignedProject(newProjectName2)) should contain(assignedProject)
 
     //should NOT ask the supervisor to create a new project
     //annoyingly there's no expectNoMsgClass, which i'd have preferred here

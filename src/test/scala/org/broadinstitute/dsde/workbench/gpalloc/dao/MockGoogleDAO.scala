@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.gpalloc.dao
 
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
-import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
+import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 
@@ -12,8 +12,8 @@ class MockGoogleDAO(operationsReturnError: Boolean = false) extends GoogleDAO {
 
   protected def randomOpName(opType: Option[String] = None): String = Seq(Some("googleOp"), opType, Some(Random.alphanumeric.take(5))).flatten.mkString("-")
 
-  def transferProjectOwnership(project: String, owner: String): Future[String] = {
-    Future.successful(project)
+  def transferProjectOwnership(project: String, owner: String): Future[AssignedProject] = {
+    Future.successful(AssignedProject(project, s"cromwell-bucket-$project"))
   }
 
   def scrubBillingProject(projectName: String): Future[Unit] = {
