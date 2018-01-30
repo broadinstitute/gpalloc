@@ -26,7 +26,8 @@ object Settings {
     "-deprecation",
     "-feature",
     "-encoding", "utf8",
-    "-target:jvm-1.8"
+    "-target:jvm-1.8",
+    "-language:postfixOps"
   )
 
   //sbt assembly settings
@@ -39,7 +40,7 @@ object Settings {
   val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
     organization  := "org.broadinstitute.dsde.workbench",
-    scalaVersion  := "2.12.2",
+    scalaVersion  := "2.12.3",
     resolvers ++= commonResolvers,
     scalacOptions ++= commonCompilerSettings
   )
