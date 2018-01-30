@@ -77,7 +77,7 @@ class ProjectCreationMonitor(projectName: String,
       newOperationRec <- googleDAO.createProject(projectName, billingAccount)
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNewProject(projectName, newOperationRec) }
     } yield {
-      ScheduleNextPoll(CreatingProject)
+      PollForStatus(CreatingProject)
     }
   }
 
@@ -88,7 +88,7 @@ class ProjectCreationMonitor(projectName: String,
           da.billingProjectQuery.updateStatus(projectName, EnablingServices),
           da.operationQuery.saveNewOperations(serviceOps)) }
     } yield {
-      ScheduleNextPoll(EnablingServices)
+      PollForStatus(EnablingServices)
     }
   }
 
