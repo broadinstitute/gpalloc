@@ -16,8 +16,10 @@ trait CommonTestData { this: ScalaFutures =>
   val newProjectName = "new-test-project"
   val newProjectName2 = "new-test-project2"
   val requestingUser = "user@example.com"
+  val badUser = "evil@villainy.com"
 
   val userInfo = UserInfo(OAuth2BearerToken("ya29.xxxxxx"), WorkbenchUserId("1234567890"), WorkbenchEmail(requestingUser), 60)
+  val badUserInfo = UserInfo(OAuth2BearerToken("ya29.bwahaha"), WorkbenchUserId("0000000000"), WorkbenchEmail(badUser), 60)
 
   val dbRef = DbSingleton.ref
 

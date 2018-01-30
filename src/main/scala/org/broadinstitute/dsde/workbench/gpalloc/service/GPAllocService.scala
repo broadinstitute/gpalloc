@@ -37,12 +37,13 @@ class GPAllocService(protected val dbRef: DbReference,
 
   def releaseGoogleProject(userInfo: UserInfo, project: String): Future[Unit] = {
     val authCheck = dbRef.inTransaction { da =>
-      da.billingProjectQuery.getBillingProject(project) map {
+      da.billingProjectQuery.getAssignedBillingProject(project) map {
         case Some(bp) =>
+          //assigned projects will have the owner field populated, but let's be cautious
           if( bp.owner.getOrElse("") != userInfo.userEmail.value ) {
-            //only assigned projects will have the owner field populated
             throw NotYourGoogleProject(project, userInfo.userEmail.value, bp.owner.getOrElse(""))
           }
+        //we say Not Found for a project that isn't in assigned yet
         case None => throw GoogleProjectNotFound(project)
       }
     }
