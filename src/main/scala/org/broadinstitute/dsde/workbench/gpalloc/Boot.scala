@@ -39,7 +39,7 @@ object Boot extends App with LazyLogging {
     val clientSecrets = GoogleClientSecrets.load(jsonFactory, new StringReader(gcsConfig.getString("secrets")))
     val googleBillingDAO = new HttpGoogleBillingDAO("gpalloc", clientSecrets, gcsConfig.getString("pathToPem"))
 
-    val projectCreationSupervisor = system.actorOf(ProjectCreationSupervisor.props("fixme-billing-account", dbRef, googleBillingDAO))
+    val projectCreationSupervisor = system.actorOf(ProjectCreationSupervisor.props("fixme-billing-account", dbRef, googleBillingDAO), "projectCreationSupervisor")
     projectCreationSupervisor ! ResumeAllProjects
 
     //TODO: config this 5

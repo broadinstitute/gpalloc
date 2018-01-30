@@ -5,12 +5,18 @@ import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, Billing
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 
+import scala.collection.mutable
 import scala.concurrent.Future
 import scala.util.Random
 
 class MockGoogleDAO(operationsReturnError: Boolean = false) extends GoogleDAO {
 
   protected def randomOpName(opType: Option[String] = None): String = Seq(Some("googleOp"), opType, Some(Random.alphanumeric.take(5))).flatten.mkString("-")
+
+  var createdProjects: mutable.Set[String] = mutable.Set.empty[String]
+  var enabledProjects: mutable.Set[String] = mutable.Set.empty[String]
+  var bucketedProjects: mutable.Set[String] = mutable.Set.empty[String]
+  var polledOpIds: mutable.Set[String] = mutable.Set.empty[String]
 
   def transferProjectOwnership(project: String, owner: String): Future[AssignedProject] = {
     Future.successful(AssignedProject(project, s"cromwell-bucket-$project"))
@@ -21,14 +27,17 @@ class MockGoogleDAO(operationsReturnError: Boolean = false) extends GoogleDAO {
   }
 
   def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
+    polledOpIds += operation.operationId
     Future.successful(operation.copy(done=true, errorMessage = if(operationsReturnError) Some("boom") else None))
   }
 
   def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord] = {
+    createdProjects += projectName
     Future.successful(ActiveOperationRecord(projectName, CreatingProject.toString, randomOpName(), false, None))
   }
 
   def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
+    enabledProjects += projectName
     val servicesToEnable = Seq("fooService", "barService", "bazService")
     Future.successful(servicesToEnable map { svc =>
       ActiveOperationRecord(projectName, EnablingServices.toString, randomOpName(Some(svc)), false, None)
@@ -36,6 +45,7 @@ class MockGoogleDAO(operationsReturnError: Boolean = false) extends GoogleDAO {
   }
 
   def setupProjectBucketAccess(projectName: String): Future[Unit] = {
+    bucketedProjects += projectName
     Future.successful(())
   }
 }
