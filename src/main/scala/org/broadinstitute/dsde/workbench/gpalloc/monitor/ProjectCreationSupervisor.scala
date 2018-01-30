@@ -40,7 +40,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
 
   val monitorNameBase = "bpmon-"
-  def monitorName(bp: String) = s"${monitorNameBase}bp"
+  def monitorName(bp: String) = s"$monitorNameBase$bp"
 
   def resumeAllProjects: Future[Unit] = {
     dbRef.inTransaction { da => da.billingProjectQuery.getCreatingProjects } map { _.foreach { bp =>
