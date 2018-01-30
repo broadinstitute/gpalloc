@@ -42,6 +42,7 @@ object Boot extends App with LazyLogging {
     val projectCreationSupervisor = system.actorOf(ProjectCreationSupervisor.props("fixme-billing-account", dbRef, googleBillingDAO))
     projectCreationSupervisor ! ResumeAllProjects
 
+    //TODO: config this 5
     val gpAllocService = new GPAllocService(dbRef, projectCreationSupervisor, googleBillingDAO, 5)
     val gpallocRoutes = new GPAllocRoutes(gpAllocService) with StandardUserInfoDirectives
 
