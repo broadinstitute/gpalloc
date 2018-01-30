@@ -9,7 +9,7 @@ object Dependencies {
   val scalaTestV    = "3.0.1"
   val slickV        = "3.2.1"
 
-  val workbenchUtilV    = "0.2-0b34b93"
+  val workbenchUtilV    = "0.3-f3ce961"
   val workbenchModelV   = "0.9-d722ae2"
   val workbenchGoogleV  = "0.11-7ad0aa8"
   val workbenchMetricsV = "0.3-1b977d7"
@@ -46,6 +46,7 @@ object Dependencies {
   // Exclude workbench-libs transitive dependencies so we can control the library versions individually.
   // workbench-google pulls in workbench-{util, model, metrics} and workbench-metrics pulls in workbench-util.
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"    % workbenchUtilV
+  val workbenchUtilTests: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-util" % workbenchUtilV % "test" classifier "tests"
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"   % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google"  % workbenchGoogleV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel, excludeWorkbenchMetrics)
   val workbenchMetrics: ModuleID =   "org.broadinstitute.dsde.workbench" %% "workbench-metrics" % workbenchMetricsV excludeAll(excludeWorkbenchUtil)
@@ -85,6 +86,7 @@ object Dependencies {
     mockito,
 
     workbenchUtil,
+    workbenchUtilTests,
     workbenchModel,
     workbenchGoogle,
     workbenchMetrics,

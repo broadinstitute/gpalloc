@@ -8,7 +8,6 @@ import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervis
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.language.postfixOps
 
 object ProjectCreationSupervisor {
   sealed trait ProjectCreationSupervisorMessage

@@ -26,9 +26,11 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
 
     //look for a single
     dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(freshBillingProjectRecord(newProjectName))
+    dbFutureValue { _.billingProjectQuery.getAssignedBillingProject(newProjectName) } shouldEqual None //not assigned
 
     //look for something that isn't there
     dbFutureValue { _.billingProjectQuery.getBillingProject("nonexistent") } shouldEqual None
+    dbFutureValue { _.billingProjectQuery.getAssignedBillingProject("nonexistent") } shouldEqual None
   }
 
   it should "update status manually" in isolatedDbTest {
@@ -41,6 +43,7 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     dbFutureValue { _.billingProjectQuery.saveNew(newProjectName, BillingProjectStatus.Unassigned) } shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(requestingUser) } shouldEqual Some(newProjectName)
     dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, Some(requestingUser), BillingProjectStatus.Assigned.toString))
+    dbFutureValue { _.billingProjectQuery.getAssignedBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, Some(requestingUser), BillingProjectStatus.Assigned.toString))
   }
 
   it should "return no projects when none exist" in isolatedDbTest {

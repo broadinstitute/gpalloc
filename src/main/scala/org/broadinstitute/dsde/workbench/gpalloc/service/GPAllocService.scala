@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.service
 
 import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
+import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.model.GPAllocException
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
@@ -22,7 +22,8 @@ case class GoogleProjectNotFound(project: String)
 
 class GPAllocService(protected val dbRef: DbReference,
                      projectCreationSupervisor: ActorRef,
-                     googleBillingDAO: HttpGoogleBillingDAO)
+                     googleBillingDAO: GoogleDAO,
+                     projectCreationThreshold: Int)
                     (implicit val executionContext: ExecutionContext) {
 
   def requestGoogleProject(userInfo: UserInfo): Future[String] = {
@@ -36,12 +37,13 @@ class GPAllocService(protected val dbRef: DbReference,
 
   def releaseGoogleProject(userInfo: UserInfo, project: String): Future[Unit] = {
     val authCheck = dbRef.inTransaction { da =>
-      da.billingProjectQuery.getBillingProject(project) map {
+      da.billingProjectQuery.getAssignedBillingProject(project) map {
         case Some(bp) =>
+          //assigned projects will have the owner field populated, but let's be cautious
           if( bp.owner.getOrElse("") != userInfo.userEmail.value ) {
-            //only assigned projects will have the owner field populated
             throw NotYourGoogleProject(project, userInfo.userEmail.value, bp.owner.getOrElse(""))
           }
+        //we say Not Found for a project that isn't in assigned yet
         case None => throw GoogleProjectNotFound(project)
       }
     }
@@ -64,7 +66,7 @@ class GPAllocService(protected val dbRef: DbReference,
   //create new google project if we don't have any available
   private def maybeCreateNewProject(): Unit = {
     dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedProjects } map {
-      case 0 => createNewGoogleProject()
+      case count if count <= projectCreationThreshold => createNewGoogleProject()
       case _ => //do nothing
     }
   }

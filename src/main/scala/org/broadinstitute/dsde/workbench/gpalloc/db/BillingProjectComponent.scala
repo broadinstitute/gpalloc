@@ -30,6 +30,10 @@ trait BillingProjectComponent extends GPAllocComponent {
       findBillingProject(billingProject).result.headOption
     }
 
+    def getAssignedBillingProject(billingProject: String): DBIO[Option[BillingProjectRecord]] = {
+      findBillingProject(billingProject).filter(_.status === BillingProjectStatus.Assigned.toString).result.headOption
+    }
+
     def getCreatingProjects: DBIO[Seq[BillingProjectRecord]] = {
       billingProjectQuery.filter(_.status inSetBind BillingProjectStatus.creatingStatuses.map(_.toString) ).result
     }
