@@ -13,7 +13,7 @@ import org.scalatest.concurrent.Eventually._
 
 import scala.concurrent.duration._
 
-class GPAllocServiceSpec  extends TestKit(ActorSystem("leonardotest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
+class GPAllocServiceSpec  extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
 
   //returns a service and a probe that watches the pretend supervisor actor
   def gpAllocService(dbRef: DbReference, projectCreationThreshold: Int): (GPAllocService, TestProbe) = {
