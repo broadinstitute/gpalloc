@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervis
 import org.broadinstitute.dsde.workbench.gpalloc.service.{GPAllocService, GoogleProjectNotFound, NoGoogleProjectAvailable, NotYourGoogleProject}
 import org.broadinstitute.dsde.workbench.util.NoopActor
 import org.scalatest.FlatSpecLike
+import org.scalatest.concurrent.Eventually._
 
 import scala.concurrent.duration._
 
@@ -88,7 +89,11 @@ class GPAllocServiceSpec  extends TestKit(ActorSystem("leonardotest")) with Test
     val (gpAlloc, _) = gpAllocService(dbRef, 0)
 
     gpAlloc.releaseGoogleProject(userInfo, newProjectName).futureValue
-    dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
+    eventually {
+      //flipping the database back to Unassigned happens in a separate future to
+      //the one returned by releaseGoogleProject, so we need to wait a bit here
+      dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
+    }
   }
 
   it should "check permissions when releasing a project" in isolatedDbTest {
