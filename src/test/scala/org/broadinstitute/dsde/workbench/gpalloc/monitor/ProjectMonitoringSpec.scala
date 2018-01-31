@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
-import akka.actor.{ActorRef, ActorSystem, Terminated}
+import akka.actor.{ActorRef, ActorSystem, PoisonPill, Terminated}
 import akka.testkit.{TestActorRef, TestKit, TestProbe}
 import org.broadinstitute.dsde.workbench.gpalloc.CommonTestData
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, MockGoogleDAO}
@@ -18,8 +18,11 @@ import scala.concurrent.duration._
 
 class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
 
-  def createSupervisor(gDAO: GoogleDAO): ActorRef = {
-    system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, 10 millis, this), "testProjectCreationSupervisor")
+  def withSupervisor[T](gDAO: GoogleDAO)(op: ActorRef => T): T = {
+    val supervisor = system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, 10 millis, this), "testProjectCreationSupervisor")
+    val result = op(supervisor)
+    supervisor ! PoisonPill
+    result
   }
 
   def findMonitorActor(projectName: String): Future[ActorRef] = {
@@ -29,24 +32,37 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
   "ProjectCreationSupervisor" should "create and monitor new projects" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
 
-    val supervisor = createSupervisor(mockGoogleDAO)
-    supervisor ! CreateProject(newProjectName)
+    withSupervisor(mockGoogleDAO) { supervisor =>
+      supervisor ! CreateProject(newProjectName)
 
-    //we're now racing against the project monitor actor, so everything from here on is eventually
-    eventually { findMonitorActor(newProjectName).futureValue }
+      //we're now racing against the project monitor actor, so everything from here on is eventually
+      eventually {
+        findMonitorActor(newProjectName).futureValue
+      }
 
-    //did the monitor actor call the right things in google?
-    val longer = Timeout(Span(500, Milliseconds)) //150ms isn't enough to progress through the actor states
-    eventually(longer) { mockGoogleDAO.createdProjects should contain(newProjectName) }
-    eventually(longer) { mockGoogleDAO.enabledProjects should contain(newProjectName) }
-    eventually(longer) { mockGoogleDAO.bucketedProjects should contain(newProjectName) }
-    eventually(longer) { mockGoogleDAO.polledOpIds.size shouldEqual (1 + mockGoogleDAO.servicesToEnable.length) } //+1 for the create op
+      //did the monitor actor call the right things in google?
+      val longer = Timeout(Span(500, Milliseconds)) //150ms isn't enough to progress through the actor states
+      eventually(longer) {
+        mockGoogleDAO.createdProjects should contain(newProjectName)
+      }
+      eventually(longer) {
+        mockGoogleDAO.enabledProjects should contain(newProjectName)
+      }
+      eventually(longer) {
+        mockGoogleDAO.bucketedProjects should contain(newProjectName)
+      }
+      eventually(longer) {
+        mockGoogleDAO.polledOpIds.size shouldEqual (1 + mockGoogleDAO.servicesToEnable.length)
+      } //+1 for the create op
 
-    //TestProjectCreationSupervisor registers its children with TestKit, so when the child is done it should self-terminate
-    expectMsgClass(1 second, classOf[Terminated])
+      //TestProjectCreationSupervisor registers its children with TestKit, so when the child is done it should self-terminate
+      expectMsgClass(1 second, classOf[Terminated])
 
-    eventually {
-      dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }
+      eventually {
+        dbFutureValue {
+          _.billingProjectQuery.getBillingProject(newProjectName)
+        }
+      }
     }
   }
 
@@ -128,7 +144,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     //pretend we've already created the project
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
-    val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=true, operationType = EnablingServices) }
+    val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=false, operationType = EnablingServices) }
     dbFutureValue { _.operationQuery.saveNewOperations(enablingOps) }
 
     //poll
@@ -158,14 +174,16 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
   it should "behave when google fails catastrophically" in isolatedDbTest {
     val errorGoogleDAO = new MockGoogleDAO(pollException = true)
 
-    //pretend we've already created the project but not polled it yet
-    val createdOp = freshOpRecord(newProjectName)
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
+    withSupervisor(errorGoogleDAO) { supervisor =>
 
-    val supervisor = createSupervisor(errorGoogleDAO)
-    supervisor ! CreateProject(newProjectName)
+      //pretend we've already created the project but not polled it yet
+      val createdOp = freshOpRecord(newProjectName)
+      dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
 
-    expectMsgClass(1 second, classOf[Terminated])
+      supervisor ! CreateProject(newProjectName)
+
+      expectMsgClass(1 second, classOf[Terminated])
+    }
   }
 
 }

@@ -22,7 +22,7 @@ class ActiveOperationComponentSpec extends TestComponent with FlatSpecLike with 
 
     //look by type
     val opMap = dbFutureValue { _.operationQuery.getActiveOperationsByType(newProjectName) }
-    opMap.keySet should contain theSameElementsAs Seq(BillingProjectStatus.CreatingProject.toString, BillingProjectStatus.EnablingServices.toString)
+    opMap.keySet should contain theSameElementsAs Seq(BillingProjectStatus.CreatingProject, BillingProjectStatus.EnablingServices)
 
     //scalatest doesn't have a clean way to check containment of map values
     opMap(BillingProjectStatus.CreatingProject) should contain theSameElementsAs newOps.take(2)
