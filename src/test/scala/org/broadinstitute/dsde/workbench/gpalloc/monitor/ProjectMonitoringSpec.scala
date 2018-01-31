@@ -70,7 +70,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     val opMap = dbFutureValue { _.operationQuery.getActiveOperationsByType(newProjectName) }
     opMap.size shouldBe 1
-    opMap(CreatingProject.toString) should contain theSameElementsAs creatingOps
+    opMap(CreatingProject) should contain theSameElementsAs creatingOps
   }
 
   it should "enableServices" in isolatedDbTest {
@@ -98,13 +98,13 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     opMap.size shouldBe 2 //keys: creating, enabling
 
     //mainly because we put it there up top, but let's check nothing crazy has happened
-    opMap(CreatingProject.toString).length shouldBe 1
-    opMap(CreatingProject.toString) should contain theSameElementsAs Seq(createdOp)
+    opMap(CreatingProject).length shouldBe 1
+    opMap(CreatingProject) should contain theSameElementsAs Seq(createdOp)
 
     //enabling more services
-    opMap(EnablingServices.toString).length shouldBe mockGoogleDAO.servicesToEnable.size
-    opMap(EnablingServices.toString).foreach { _.billingProjectName shouldBe newProjectName }
-    opMap(EnablingServices.toString).foreach { _.done shouldBe false }
+    opMap(EnablingServices).length shouldBe mockGoogleDAO.servicesToEnable.size
+    opMap(EnablingServices).foreach { _.billingProjectName shouldBe newProjectName }
+    opMap(EnablingServices).foreach { _.done shouldBe false }
   }
 
   it should "completeSetup" in isolatedDbTest {
@@ -114,7 +114,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     //pretend we've already created the project and enabled services
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
-    val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=true, operationType = EnablingServices.toString) }
+    val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=true, operationType = EnablingServices) }
     dbFutureValue { _.operationQuery.saveNewOperations(enablingOps) }
 
     //completing setup should complete

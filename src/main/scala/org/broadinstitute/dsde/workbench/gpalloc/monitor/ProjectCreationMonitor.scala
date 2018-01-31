@@ -67,7 +67,7 @@ class ProjectCreationMonitor(projectName: String,
 
   def resumeInflightProject: Future[ProjectCreationMonitorMessage] = {
     dbRef.inTransaction { da => da.billingProjectQuery.getBillingProject(projectName) } map {
-      case Some(bp) => PollForStatus(BillingProjectStatus.withNameIgnoreCase(bp.status))
+      case Some(bp) => PollForStatus(bp.status)
       case None => throw new WorkbenchException(s"ProjectCreationMonitor asked to find missing project $projectName")
     }
   }
@@ -106,7 +106,7 @@ class ProjectCreationMonitor(projectName: String,
     val updatedOpsF = for {
       //get ops in progress
       activeOpMap <- dbRef.inTransaction { da => da.operationQuery.getActiveOperationsByType(projectName) }
-      activeCurrentStatusOps = activeOpMap(status.toString)
+      activeCurrentStatusOps = activeOpMap(status)
       //ask google
       updatedOps <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => googleDAO.pollOperation(op) }
       //update the db with new op status

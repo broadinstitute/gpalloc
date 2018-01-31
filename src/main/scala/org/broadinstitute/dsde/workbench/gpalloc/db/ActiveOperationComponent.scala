@@ -9,9 +9,9 @@ case class ActiveOperationRecord(billingProjectName: String,
                                  done: Boolean,
                                  errorMessage: Option[String])
 
-object ActiveOperationRecord extends ((String, BillingProjectStatus, String, Boolean, Option[String]) => ActiveOperationRecord) {
-  def fromDB(tuple:(String, String, String, Boolean, Option[String])): ActiveOperationRecord = {
-    val (billingProjectName, operationType, operationId, done, errorMessage) = tuple
+object ActiveOperationRecord {
+  def fromDB(dbRow: (String, String, String, Boolean, Option[String])): ActiveOperationRecord = {
+    val (billingProjectName, operationType, operationId, done, errorMessage) = dbRow
     ActiveOperationRecord(billingProjectName, BillingProjectStatus.withNameIgnoreCase(operationType), operationId, done, errorMessage)
   }
 
@@ -52,7 +52,7 @@ trait ActiveOperationComponent extends GPAllocComponent {
       (operationQuery ++= newOperationRecs) map { _ => newOperationRecs }
     }
 
-    def getActiveOperationsByType(billingProject: String): DBIO[Map[String, Seq[ActiveOperationRecord]]] = {
+    def getActiveOperationsByType(billingProject: String): DBIO[Map[BillingProjectStatus, Seq[ActiveOperationRecord]]] = {
       findOperations(billingProject).filter(!_.done).result map { ops =>
         ops.groupBy(_.operationType)
       }

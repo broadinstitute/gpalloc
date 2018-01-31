@@ -129,7 +129,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
     // this code is a colossal DRY violation but because the operations collection is different
     // for cloudResManager and servicesManager and they return different but identical Status objects
     // there is not much else to be done... too bad scala does not have duck typing.
-    BillingProjectStatus.withNameIgnoreCase(operation.operationType) match {
+    operation.operationType match {
       case CreatingProject =>
         retryWhen500orGoogleError(() => {
           executeGoogleRequest(cloudResources.operations().get(operation.operationId))
