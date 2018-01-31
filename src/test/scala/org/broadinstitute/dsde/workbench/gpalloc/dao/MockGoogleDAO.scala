@@ -9,13 +9,14 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.util.Random
 
-class MockGoogleDAO(operationsReturnError: Boolean = false) extends GoogleDAO {
+class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: Boolean = true, pollException: Boolean = false) extends GoogleDAO {
   val servicesToEnable = Seq("fooService", "barService", "bazService")
 
   var createdProjects: mutable.Set[String] = mutable.Set.empty[String]
   var enabledProjects: mutable.Set[String] = mutable.Set.empty[String]
   var bucketedProjects: mutable.Set[String] = mutable.Set.empty[String]
   var polledOpIds: mutable.Set[String] = mutable.Set.empty[String]
+  var scrubbedProjects: mutable.Set[String] = mutable.Set.empty[String]
 
   protected def randomOpName(opType: Option[String] = None): String =
     Seq(Some("googleOp"), opType, Some(Random.alphanumeric.take(5).mkString)).flatten.mkString("-")
@@ -25,23 +26,28 @@ class MockGoogleDAO(operationsReturnError: Boolean = false) extends GoogleDAO {
   }
 
   def scrubBillingProject(projectName: String): Future[Unit] = {
+    scrubbedProjects += projectName
     Future.successful(())
   }
 
   def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
-    polledOpIds += operation.operationId
-    Future.successful(operation.copy(done=true, errorMessage = if(operationsReturnError) Some("boom") else None))
+    if(!pollException) {
+      polledOpIds += operation.operationId
+      Future.successful(operation.copy(done=operationsDoneYet, errorMessage = if(operationsReturnError) Some("boom") else None))
+    } else {
+      Future.failed(new RuntimeException("boom"))
+    }
   }
 
   def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord] = {
     createdProjects += projectName
-    Future.successful(ActiveOperationRecord(projectName, CreatingProject, randomOpName(), false, None))
+    Future.successful(ActiveOperationRecord(projectName, CreatingProject, randomOpName(), done = false, None))
   }
 
   def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
     enabledProjects += projectName
     Future.successful(servicesToEnable map { svc =>
-      ActiveOperationRecord(projectName, EnablingServices, randomOpName(Some(svc)), false, None)
+      ActiveOperationRecord(projectName, EnablingServices, randomOpName(Some(svc)), done = false, None)
     })
   }
 

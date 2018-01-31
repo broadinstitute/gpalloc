@@ -10,6 +10,7 @@ case class ActiveOperationRecord(billingProjectName: String,
                                  errorMessage: Option[String])
 
 object ActiveOperationRecord {
+  //these give us magic conversions of enums to and from the db
   def fromDB(dbRow: (String, String, String, Boolean, Option[String])): ActiveOperationRecord = {
     val (billingProjectName, operationType, operationId, done, errorMessage) = dbRow
     ActiveOperationRecord(billingProjectName, BillingProjectStatus.withNameIgnoreCase(operationType), operationId, done, errorMessage)

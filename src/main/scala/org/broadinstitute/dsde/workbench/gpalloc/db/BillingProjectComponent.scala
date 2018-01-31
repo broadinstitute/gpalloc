@@ -8,6 +8,7 @@ case class BillingProjectRecord(billingProjectName: String,
                                 status: BillingProjectStatus)
 
 object BillingProjectRecord {
+  //these give us magic conversions of enums to and from the db
   def fromDB(dbRow: (String, Option[String], String)): BillingProjectRecord = {
     val (billingProjectName, owner, status) = dbRow
     BillingProjectRecord(billingProjectName, owner, BillingProjectStatus.withNameIgnoreCase(status))

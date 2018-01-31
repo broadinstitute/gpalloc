@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
+import akka.actor.Status.Failure
 import akka.actor.{Actor, Cancellable, Props}
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
@@ -57,8 +58,19 @@ class ProjectCreationMonitor(projectName: String,
       pollForStatus(status) pipeTo self
 
     case ScheduleNextPoll(status) => scheduleNextPoll(status)
-    case Fail(failedOps) => stop(self)
+
+    //stop because project creation completed successfully
     case Success => stop(self)
+
+    //stop because google said an operation failed
+    case Fail(failedOps) =>
+      logger.error(s"Creation of new project $projectName failed. These opids died: ${failedOps.map(op => s"id: ${op.operationId}, error: ${op.errorMessage}").mkString(", ")}")
+      stop(self)
+
+    //stop because something (probably google polling) throw an exception
+    case Failure(throwable) =>
+      logger.error(s"Creation of new project $projectName failed because of an exception: ${throwable.getMessage}")
+      stop(self)
   }
 
   def scheduleNextPoll(status: BillingProjectStatus): Unit = {
