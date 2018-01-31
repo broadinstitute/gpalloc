@@ -7,6 +7,11 @@ case class BillingProjectRecord(billingProjectName: String,
                                 owner: Option[String],
                                 status: String)
 
+object BillingProjectRecord extends ((String, Option[String], String) => BillingProjectRecord) {
+  def apply(billingProjectName: String, owner: Option[String], status: BillingProjectStatus): BillingProjectRecord =
+    BillingProjectRecord(billingProjectName, owner, status.toString)
+}
+
 trait BillingProjectComponent extends GPAllocComponent {
   this: ActiveOperationComponent =>
 

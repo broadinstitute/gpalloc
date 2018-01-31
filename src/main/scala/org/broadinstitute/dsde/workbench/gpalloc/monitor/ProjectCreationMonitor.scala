@@ -135,7 +135,7 @@ class ProjectCreationMonitor(projectName: String,
     status match {
       case CreatingProject => EnableServices
       case EnablingServices => CompleteSetup
-      case _ => throw new WorkbenchException("what the")
+      case _ => throw new WorkbenchException(s"ProjectCreationMonitor for $projectName called getNextStatusMessage with surprising status $status")
     }
   }
 }

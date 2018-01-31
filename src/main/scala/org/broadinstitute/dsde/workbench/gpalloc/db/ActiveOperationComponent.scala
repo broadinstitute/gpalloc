@@ -4,10 +4,22 @@ import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 
 case class ActiveOperationRecord(billingProjectName: String,
-                                 operationType: String,
+                                 operationType: BillingProjectStatus,
                                  operationId: String,
                                  done: Boolean,
                                  errorMessage: Option[String])
+
+object ActiveOperationRecord extends ((String, BillingProjectStatus, String, Boolean, Option[String]) => ActiveOperationRecord) {
+  def fromDB(tuple:(String, String, String, Boolean, Option[String])): ActiveOperationRecord = {
+    val (billingProjectName, operationType, operationId, done, errorMessage) = tuple
+    ActiveOperationRecord(billingProjectName, BillingProjectStatus.withNameIgnoreCase(operationType), operationId, done, errorMessage)
+  }
+
+  def toDB(rec: ActiveOperationRecord): Option[(String, String, String, Boolean, Option[String])] = {
+    Some((rec.billingProjectName, rec.operationType.toString, rec.operationId, rec.done, rec.errorMessage))
+  }
+}
+
 
 trait ActiveOperationComponent extends GPAllocComponent {
   this: BillingProjectComponent =>
@@ -23,7 +35,7 @@ trait ActiveOperationComponent extends GPAllocComponent {
 
     def fkBillingProject = foreignKey("FK_BILLING_PROJECT", billingProjectName, billingProjectQuery)(_.billingProjectName)
 
-    def * = (billingProjectName, operationType, operationId, done, errorMessage) <> (ActiveOperationRecord.tupled, ActiveOperationRecord.unapply)
+    def * = (billingProjectName, operationType, operationId, done, errorMessage) <> (ActiveOperationRecord.fromDB, ActiveOperationRecord.toDB)
   }
 
   object operationQuery extends TableQuery(new ActiveOperationTable(_)) {
@@ -32,11 +44,11 @@ trait ActiveOperationComponent extends GPAllocComponent {
       operationQuery.filter(_.billingProjectName === billingProject)
     }
 
-    def getOperations(billingProject: String) = {
+    def getOperations(billingProject: String): DBIO[Seq[ActiveOperationRecord]] = {
       findOperations(billingProject).result
     }
 
-    def saveNewOperations(newOperationRecs: Seq[ActiveOperationRecord]) = {
+    def saveNewOperations(newOperationRecs: Seq[ActiveOperationRecord]): DBIO[Seq[ActiveOperationRecord]] = {
       (operationQuery ++= newOperationRecs) map { _ => newOperationRecs }
     }
 
@@ -46,12 +58,12 @@ trait ActiveOperationComponent extends GPAllocComponent {
       }
     }
 
-    def updateOperations(updatedOps: Seq[ActiveOperationRecord]) = {
+    def updateOperations(updatedOps: Seq[ActiveOperationRecord]): DBIO[Int] = {
       DBIO.sequence(updatedOps.map { rec =>
         operationQuery
           .filter(o => o.billingProjectName === rec.billingProjectName && o.operationId === rec.operationId )
           .update(rec)
-      })
+      }) map { _.sum }
     }
 
   }

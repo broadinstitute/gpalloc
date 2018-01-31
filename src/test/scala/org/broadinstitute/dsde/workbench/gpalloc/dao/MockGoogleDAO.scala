@@ -10,13 +10,15 @@ import scala.concurrent.Future
 import scala.util.Random
 
 class MockGoogleDAO(operationsReturnError: Boolean = false) extends GoogleDAO {
-
-  protected def randomOpName(opType: Option[String] = None): String = Seq(Some("googleOp"), opType, Some(Random.alphanumeric.take(5))).flatten.mkString("-")
+  val servicesToEnable = Seq("fooService", "barService", "bazService")
 
   var createdProjects: mutable.Set[String] = mutable.Set.empty[String]
   var enabledProjects: mutable.Set[String] = mutable.Set.empty[String]
   var bucketedProjects: mutable.Set[String] = mutable.Set.empty[String]
   var polledOpIds: mutable.Set[String] = mutable.Set.empty[String]
+
+  protected def randomOpName(opType: Option[String] = None): String =
+    Seq(Some("googleOp"), opType, Some(Random.alphanumeric.take(5).mkString)).flatten.mkString("-")
 
   def transferProjectOwnership(project: String, owner: String): Future[AssignedProject] = {
     Future.successful(AssignedProject(project, s"cromwell-bucket-$project"))
@@ -33,14 +35,13 @@ class MockGoogleDAO(operationsReturnError: Boolean = false) extends GoogleDAO {
 
   def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord] = {
     createdProjects += projectName
-    Future.successful(ActiveOperationRecord(projectName, CreatingProject.toString, randomOpName(), false, None))
+    Future.successful(ActiveOperationRecord(projectName, CreatingProject, randomOpName(), false, None))
   }
 
   def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
     enabledProjects += projectName
-    val servicesToEnable = Seq("fooService", "barService", "bazService")
     Future.successful(servicesToEnable map { svc =>
-      ActiveOperationRecord(projectName, EnablingServices.toString, randomOpName(Some(svc)), false, None)
+      ActiveOperationRecord(projectName, EnablingServices, randomOpName(Some(svc)), false, None)
     })
   }
 
