@@ -53,21 +53,16 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
 
   //giant bundle of scopes we need
   val saScopes = Seq(
-    StorageScopes.DEVSTORAGE_FULL_CONTROL,
-    ComputeScopes.COMPUTE,
-    ComputeScopes.CLOUD_PLATFORM,
-    DirectoryScopes.ADMIN_DIRECTORY_GROUP,
-    GenomicsScopes.GENOMICS,
     "https://www.googleapis.com/auth/cloud-billing",
-    PlusScopes.USERINFO_EMAIL,
-    PlusScopes.USERINFO_PROFILE)
+    ComputeScopes.CLOUD_PLATFORM
+   )
 
   val credential: Credential = {
     new GoogleCredential.Builder()
       .setTransport(httpTransport)
       .setJsonFactory(jsonFactory)
+      .setServiceAccountScopes(saScopes.asJava)
       .setServiceAccountId(billingPemEmail)
-      .setServiceAccountScopes(saScopes.asJava) // grant bucket-creation powers
       .setServiceAccountPrivateKeyFromPemFile(new java.io.File(serviceAccountPemFile))
       .setServiceAccountUser(billingEmail)
       .build()
@@ -155,8 +150,8 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
       executeGoogleRequest(cloudResources.projects().create(
         new Project()
           .setName(projectName)
-          .setProjectId(projectName)
-          .setLabels(Map("billingaccount" -> billingAccount).asJava)))
+          .setProjectId(projectName)))
+          //.setLabels(Map("billingaccount" -> billingAccount).asJava)))
     }).recover {
       case t: HttpResponseException if StatusCode.int2StatusCode(t.getStatusCode) == StatusCodes.Conflict =>
         throw GoogleProjectConflict(projectName)

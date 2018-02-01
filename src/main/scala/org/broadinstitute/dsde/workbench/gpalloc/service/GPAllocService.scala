@@ -72,6 +72,6 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   private def createNewGoogleProject(): Unit = {
-    projectCreationSupervisor ! CreateProject(s"gpalloc-${Random.alphanumeric.take(7).mkString}")
+    projectCreationSupervisor ! CreateProject(s"gpalloc-${Random.alphanumeric.take(7).mkString.toLowerCase}")
   }
 }
