@@ -36,20 +36,20 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
   it should "update status manually" in isolatedDbTest {
     dbFutureValue { _.billingProjectQuery.saveNew(newProjectName) } shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.updateStatus(newProjectName, BillingProjectStatus.EnablingServices)} shouldBe ()
-    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.EnablingServices.toString))
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.EnablingServices))
   }
 
   it should "assign a free project when one exists" in isolatedDbTest {
     dbFutureValue { _.billingProjectQuery.saveNew(newProjectName, BillingProjectStatus.Unassigned) } shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(requestingUser) } shouldEqual Some(newProjectName)
-    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, Some(requestingUser), BillingProjectStatus.Assigned.toString))
-    dbFutureValue { _.billingProjectQuery.getAssignedBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, Some(requestingUser), BillingProjectStatus.Assigned.toString))
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, Some(requestingUser), BillingProjectStatus.Assigned))
+    dbFutureValue { _.billingProjectQuery.getAssignedBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, Some(requestingUser), BillingProjectStatus.Assigned))
   }
 
   it should "return no projects when none exist" in isolatedDbTest {
     dbFutureValue { _.billingProjectQuery.saveNew(newProjectName, BillingProjectStatus.Assigned) } shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(requestingUser) } shouldEqual None
-    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.Assigned.toString))
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.Assigned))
   }
 
   it should "count the number of unassigned projects" in isolatedDbTest {
@@ -71,10 +71,10 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(requestingUser) } shouldEqual Some(newProjectName)
     dbFutureValue { _.billingProjectQuery.releaseProject(newProjectName) } shouldEqual 1
 
-    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.Unassigned.toString))
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.Unassigned))
 
     //ensure the other one wasn't harmed
-    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName2) } shouldEqual Some(BillingProjectRecord(newProjectName2, None, BillingProjectStatus.CreatingProject.toString))
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName2) } shouldEqual Some(BillingProjectRecord(newProjectName2, None, BillingProjectStatus.CreatingProject))
   }
 
   it should "not release projects that aren't in Assigned" in isolatedDbTest {

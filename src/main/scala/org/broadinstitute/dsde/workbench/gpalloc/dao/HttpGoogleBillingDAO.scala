@@ -129,7 +129,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
     // this code is a colossal DRY violation but because the operations collection is different
     // for cloudResManager and servicesManager and they return different but identical Status objects
     // there is not much else to be done... too bad scala does not have duck typing.
-    BillingProjectStatus.withNameIgnoreCase(operation.operationType) match {
+    operation.operationType match {
       case CreatingProject =>
         retryWhen500orGoogleError(() => {
           executeGoogleRequest(cloudResources.operations().get(operation.operationId))
@@ -164,7 +164,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
       if (toScalaBool(googleOperation.getDone) && Option(googleOperation.getError).exists(_.getCode == Code.ALREADY_EXISTS.value())) {
         throw GoogleProjectConflict(projectName)
       }
-      ActiveOperationRecord(projectName, CreatingProject.toString, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+      ActiveOperationRecord(projectName, CreatingProject, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
     })
   }
 
@@ -197,7 +197,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
       operations <- Future.sequence(services.map { service => retryWhen500orGoogleError(() => {
         executeGoogleRequest(serviceManager.services().enable(service, new EnableServiceRequest().setConsumerId(s"project:${projectName}")))
       }) map { googleOperation =>
-        ActiveOperationRecord(projectName, EnablingServices.toString, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+        ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
       }})
 
     } yield {

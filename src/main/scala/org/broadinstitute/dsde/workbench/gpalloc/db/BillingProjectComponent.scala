@@ -5,7 +5,19 @@ import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.Bill
 
 case class BillingProjectRecord(billingProjectName: String,
                                 owner: Option[String],
-                                status: String)
+                                status: BillingProjectStatus)
+
+object BillingProjectRecord {
+  //these give us magic conversions of enums to and from the db
+  def fromDB(dbRow: (String, Option[String], String)): BillingProjectRecord = {
+    val (billingProjectName, owner, status) = dbRow
+    BillingProjectRecord(billingProjectName, owner, BillingProjectStatus.withNameIgnoreCase(status))
+  }
+
+  def toDB(rec: BillingProjectRecord): Option[(String, Option[String], String)] = {
+    Some((rec.billingProjectName, rec.owner, rec.status.toString))
+  }
+}
 
 trait BillingProjectComponent extends GPAllocComponent {
   this: ActiveOperationComponent =>
@@ -17,7 +29,7 @@ trait BillingProjectComponent extends GPAllocComponent {
     def owner =                       column[Option[String]]    ("owner",                 O.Length(254))
     def status =                      column[String]            ("status",                O.Length(254))
 
-    def * = (billingProjectName, owner, status) <> (BillingProjectRecord.tupled, BillingProjectRecord.unapply)
+    def * = (billingProjectName, owner, status) <> (BillingProjectRecord.fromDB, BillingProjectRecord.toDB)
   }
 
   object billingProjectQuery extends TableQuery(new BillingProjectTable(_)) {
@@ -39,7 +51,7 @@ trait BillingProjectComponent extends GPAllocComponent {
     }
 
     private[db] def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
-      (billingProjectQuery  += BillingProjectRecord(billingProject, None, status.toString)) map { _ =>
+      (billingProjectQuery  += BillingProjectRecord(billingProject, None, status)) map { _ =>
         billingProject
       }
     }

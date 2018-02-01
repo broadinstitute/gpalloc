@@ -16,12 +16,12 @@ import scala.concurrent.duration._
 class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
 
   //returns a service and a probe that watches the pretend supervisor actor
-  def gpAllocService(dbRef: DbReference, projectCreationThreshold: Int): (GPAllocService, TestProbe) = {
-    val mockGoogleDAO = new MockGoogleDAO(false)
+  def gpAllocService(dbRef: DbReference, projectCreationThreshold: Int): (GPAllocService, TestProbe, MockGoogleDAO) = {
+    val mockGoogleDAO = new MockGoogleDAO()
     val probe = TestProbe()
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
-    (new GPAllocService(dbRef, probe.ref, mockGoogleDAO, 0), probe)
+    (new GPAllocService(dbRef, probe.ref, mockGoogleDAO, 0), probe, mockGoogleDAO)
   }
 
   "GPAllocService" should "request an existing google project" in isolatedDbTest {
@@ -30,7 +30,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
 
     //make a service with a project creation threshold of 0 to trigger making a new one once this one is alloc'd
-    val (gpAlloc, probe) = gpAllocService(dbRef, 0)
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 0)
 
     val assignedProject = gpAlloc.requestGoogleProject(userInfo).futureValue
     assignedProject shouldEqual toAssignedProject(newProjectName)
@@ -46,7 +46,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   it should "barf when you request a google project but there are none in the pool" in isolatedDbTest {
     //make a service with a project creation threshold of 0 to trigger making a new one once this one is alloc'd
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
-    val (gpAlloc, probe) = gpAllocService(dbRef, 0)
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 0)
 
     val noProjectExc = gpAlloc.requestGoogleProject(userInfo).failed.futureValue
     noProjectExc shouldBe a [NoGoogleProjectAvailable]
@@ -66,7 +66,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 2
 
     //after assigning a project, we'll have 1 left, so a threshold of 0 means we shouldn't create another
-    val (gpAlloc, probe) = gpAllocService(dbRef, 0)
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 0)
 
     val assignedProject = gpAlloc.requestGoogleProject(userInfo).futureValue
     Seq(toAssignedProject(newProjectName), toAssignedProject(newProjectName2)) should contain(assignedProject)
@@ -86,7 +86,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
 
-    val (gpAlloc, _) = gpAllocService(dbRef, 0)
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0)
 
     gpAlloc.releaseGoogleProject(userInfo, newProjectName).futureValue
     eventually {
@@ -94,6 +94,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
       //the one returned by releaseGoogleProject, so we need to wait a bit here
       dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
     }
+
+    mockGoogleDAO.scrubbedProjects should contain theSameElementsAs Set(newProjectName)
   }
 
   it should "check permissions when releasing a project" in isolatedDbTest {
@@ -103,26 +105,29 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
 
-    val (gpAlloc, _) = gpAllocService(dbRef, 0)
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0)
 
     val releaseExc = gpAlloc.releaseGoogleProject(badUserInfo, newProjectName).failed.futureValue
     releaseExc shouldBe a [NotYourGoogleProject]
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
+    mockGoogleDAO.scrubbedProjects shouldBe 'empty
   }
 
   it should "not let you release a project that doesn't exist" in isolatedDbTest {
-    val (gpAlloc, _) = gpAllocService(dbRef, 0)
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0)
     val releaseExc = gpAlloc.releaseGoogleProject(userInfo, "nonexistent").failed.futureValue
     releaseExc shouldBe a [GoogleProjectNotFound]
+    mockGoogleDAO.scrubbedProjects shouldBe 'empty
   }
 
   it should "not let you release a project that's not assigned" in isolatedDbTest {
     //add an unassigned one
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName
 
-    val (gpAlloc, _) = gpAllocService(dbRef, 0)
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0)
     val releaseExc = gpAlloc.releaseGoogleProject(userInfo, newProjectName).failed.futureValue
     releaseExc shouldBe a [GoogleProjectNotFound]
+    mockGoogleDAO.scrubbedProjects shouldBe 'empty
   }
 }
 

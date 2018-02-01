@@ -13,6 +13,7 @@ import org.scalatest.concurrent.ScalaFutures
 import scala.util.Random
 
 trait CommonTestData { this: ScalaFutures =>
+  val testBillingAccount = "test-billing-account"
   val newProjectName = "new-test-project"
   val newProjectName2 = "new-test-project2"
   val requestingUser = "user@example.com"
@@ -24,12 +25,12 @@ trait CommonTestData { this: ScalaFutures =>
   val dbRef = DbSingleton.ref
 
   def freshBillingProjectRecord(projectName: String): BillingProjectRecord = {
-    BillingProjectRecord(projectName, None, BillingProjectStatus.CreatingProject.toString)
+    BillingProjectRecord(projectName, None, BillingProjectStatus.CreatingProject)
   }
 
   def freshOpRecord(projectName: String): ActiveOperationRecord = {
     val random = Random.alphanumeric.take(5).mkString
-    ActiveOperationRecord(projectName, BillingProjectStatus.CreatingProject.toString, s"opid-$random", done = false, None)
+    ActiveOperationRecord(projectName, BillingProjectStatus.CreatingProject, s"opid-$random", done = false, None)
   }
 
   def toAssignedProject(projectName: String): AssignedProject = {

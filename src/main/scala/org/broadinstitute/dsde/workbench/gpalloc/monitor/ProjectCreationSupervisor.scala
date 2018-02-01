@@ -1,8 +1,8 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
-import akka.actor.{Actor, PoisonPill, Props, SupervisorStrategy}
+import akka.actor.{Actor, ActorRef, PoisonPill, Props, SupervisorStrategy}
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
+import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 
@@ -16,13 +16,13 @@ object ProjectCreationSupervisor {
 
   def props(billingAccount: String,
             dbRef: DbReference,
-            googleDAO: HttpGoogleBillingDAO,
+            googleDAO: GoogleDAO,
             pollInterval: FiniteDuration = 1 minutes): Props = {
     Props(new ProjectCreationSupervisor(billingAccount, dbRef, googleDAO, pollInterval))
   }
 }
 
-class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, googleDAO: HttpGoogleBillingDAO, pollInterval: FiniteDuration)
+class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, googleDAO: GoogleDAO, pollInterval: FiniteDuration)
   extends Actor
   with LazyLogging {
 
@@ -49,8 +49,12 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   }
 
   def createProject(projectName: String): Unit = {
-    val newProjectMonitor = context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, pollInterval), monitorName(projectName))
+    val newProjectMonitor = createChildActor(projectName)
     newProjectMonitor ! ProjectCreationMonitor.CreateProject
+  }
+
+  def createChildActor(projectName: String): ActorRef = {
+    system.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, pollInterval), monitorName(projectName))
   }
 
   //TODO: hook this up. drop the database, optionally delete the projects

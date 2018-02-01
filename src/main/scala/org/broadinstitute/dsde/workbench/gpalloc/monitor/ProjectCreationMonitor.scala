@@ -1,9 +1,10 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
+import akka.actor.Status.Failure
 import akka.actor.{Actor, Cancellable, Props}
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
+import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, DataAccess, DbReference}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
@@ -28,7 +29,7 @@ object ProjectCreationMonitor {
   def props(projectName: String,
             billingAccount: String,
             dbRef: DbReference,
-            googleDAO: HttpGoogleBillingDAO,
+            googleDAO: GoogleDAO,
             pollInterval: FiniteDuration): Props = {
     Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, pollInterval))
   }
@@ -37,7 +38,7 @@ object ProjectCreationMonitor {
 class ProjectCreationMonitor(projectName: String,
                              billingAccount: String,
                              dbRef: DbReference,
-                             googleDAO: HttpGoogleBillingDAO,
+                             googleDAO: GoogleDAO,
                              pollInterval: FiniteDuration)
   extends Actor
   with LazyLogging {
@@ -57,8 +58,19 @@ class ProjectCreationMonitor(projectName: String,
       pollForStatus(status) pipeTo self
 
     case ScheduleNextPoll(status) => scheduleNextPoll(status)
-    case Fail(failedOps) => stop(self)
+
+    //stop because project creation completed successfully
     case Success => stop(self)
+
+    //stop because google said an operation failed
+    case Fail(failedOps) =>
+      logger.error(s"Creation of new project $projectName failed. These opids died: ${failedOps.map(op => s"id: ${op.operationId}, error: ${op.errorMessage}").mkString(", ")}")
+      stop(self)
+
+    //stop because something (probably google polling) throw an exception
+    case Failure(throwable) =>
+      logger.error(s"Creation of new project $projectName failed because of an exception: ${throwable.getMessage}")
+      stop(self)
   }
 
   def scheduleNextPoll(status: BillingProjectStatus): Unit = {
@@ -67,7 +79,7 @@ class ProjectCreationMonitor(projectName: String,
 
   def resumeInflightProject: Future[ProjectCreationMonitorMessage] = {
     dbRef.inTransaction { da => da.billingProjectQuery.getBillingProject(projectName) } map {
-      case Some(bp) => PollForStatus(BillingProjectStatus.withNameIgnoreCase(bp.status))
+      case Some(bp) => PollForStatus(bp.status)
       case None => throw new WorkbenchException(s"ProjectCreationMonitor asked to find missing project $projectName")
     }
   }
@@ -77,7 +89,7 @@ class ProjectCreationMonitor(projectName: String,
       newOperationRec <- googleDAO.createProject(projectName, billingAccount)
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNewProject(projectName, newOperationRec) }
     } yield {
-      ScheduleNextPoll(CreatingProject)
+      PollForStatus(CreatingProject)
     }
   }
 
@@ -88,7 +100,7 @@ class ProjectCreationMonitor(projectName: String,
           da.billingProjectQuery.updateStatus(projectName, EnablingServices),
           da.operationQuery.saveNewOperations(serviceOps)) }
     } yield {
-      ScheduleNextPoll(EnablingServices)
+      PollForStatus(EnablingServices)
     }
   }
 
@@ -106,7 +118,7 @@ class ProjectCreationMonitor(projectName: String,
     val updatedOpsF = for {
       //get ops in progress
       activeOpMap <- dbRef.inTransaction { da => da.operationQuery.getActiveOperationsByType(projectName) }
-      activeCurrentStatusOps = activeOpMap(status.toString)
+      activeCurrentStatusOps = activeOpMap(status)
       //ask google
       updatedOps <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => googleDAO.pollOperation(op) }
       //update the db with new op status
@@ -135,7 +147,7 @@ class ProjectCreationMonitor(projectName: String,
     status match {
       case CreatingProject => EnableServices
       case EnablingServices => CompleteSetup
-      case _ => throw new WorkbenchException("what the")
+      case _ => throw new WorkbenchException(s"ProjectCreationMonitor for $projectName called getNextStatusMessage with surprising status $status")
     }
   }
 }
