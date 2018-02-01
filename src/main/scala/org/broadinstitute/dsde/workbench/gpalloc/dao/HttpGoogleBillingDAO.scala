@@ -36,7 +36,7 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
-class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, serviceAccountPemFile: String)
+class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billingPemEmail: String, billingEmail: String)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
   extends GoogleDAO with GoogleUtilities {
 
@@ -48,8 +48,6 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
 
   implicit val errorReportSource = ErrorReportSource("gpalloc-google")
 
-  val serviceAccountClientId: String = clientSecrets.getDetails.get("client_email").toString
-
   lazy val httpTransport = GoogleNetHttpTransport.newTrustedTransport
   lazy val jsonFactory = JacksonFactory.getDefaultInstance
 
@@ -57,6 +55,7 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
   val saScopes = Seq(
     StorageScopes.DEVSTORAGE_FULL_CONTROL,
     ComputeScopes.COMPUTE,
+    ComputeScopes.CLOUD_PLATFORM,
     DirectoryScopes.ADMIN_DIRECTORY_GROUP,
     GenomicsScopes.GENOMICS,
     "https://www.googleapis.com/auth/cloud-billing",
@@ -67,9 +66,10 @@ class HttpGoogleBillingDAO(appName: String, clientSecrets: GoogleClientSecrets, 
     new GoogleCredential.Builder()
       .setTransport(httpTransport)
       .setJsonFactory(jsonFactory)
-      .setServiceAccountId(serviceAccountClientId)
+      .setServiceAccountId(billingPemEmail)
       .setServiceAccountScopes(saScopes.asJava) // grant bucket-creation powers
       .setServiceAccountPrivateKeyFromPemFile(new java.io.File(serviceAccountPemFile))
+      .setServiceAccountUser(billingEmail)
       .build()
   }
 
