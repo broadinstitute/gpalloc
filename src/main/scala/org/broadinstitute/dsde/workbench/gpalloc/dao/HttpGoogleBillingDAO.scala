@@ -151,7 +151,6 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
         new Project()
           .setName(projectName)
           .setProjectId(projectName)))
-          //.setLabels(Map("billingaccount" -> billingAccount).asJava)))
     }).recover {
       case t: HttpResponseException if StatusCode.int2StatusCode(t.getStatusCode) == StatusCodes.Conflict =>
         throw GoogleProjectConflict(projectName)
