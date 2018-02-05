@@ -35,6 +35,7 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, 
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billingPemEmail: String, billingEmail: String)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
@@ -92,6 +93,17 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     new Iam.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
+  //leaving this floating around because it's useful for debugging
+  implicit class DebuggableFuture[T](f: Future[T]) {
+    def debug(str: String) = {
+      f.onComplete {
+        case Success(_) =>
+        case Failure(e) => logger.error(str, e)
+      }
+      f
+    }
+  }
+
   override def transferProjectOwnership(project: String, owner: String): Future[AssignedProject] = {
     /* NOTE: There is no work to be done here. It is up to the caller, inside their own FC stack to:
      * - add the project to the rawls db
@@ -109,13 +121,14 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     val cleanupSAKeysF = cleanupPetSAKeys(projectName)
 
     for {
-      project <- getGoogleProject(projectName)
-      _ <- removePermissionsFromCromwellAuthBucket(projectName, project.getProjectNumber)
       _ <- cleanupPolicyF
       _ <- cleanupSAKeysF
+      _ <- cleanupCromwellAuthBucket(projectName)
     } yield {
       //nah
     }
+
+    //TODO: remove some google groups https://github.com/broadinstitute/gpalloc/issues/18
   }
 
   //poll google for what's going on
@@ -244,7 +257,11 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     val bucketName = cromwellAuthBucketName(billingProjectName)
     retryWithRecoverWhen500orGoogleError(
       () => {
-        val bucketAcls = List(new BucketAccessControl().setEntity("project-editors-" + projectNumber).setRole("OWNER"), new BucketAccessControl().setEntity("project-owners-" + projectNumber).setRole("OWNER")).asJava
+        //Note we have to give ourselves access to the bucket too, otherwise we can't clean up the bucket when we're done.
+        val bucketAcls = List(
+          new BucketAccessControl().setEntity("user-" + billingEmail).setRole("OWNER"),
+          new BucketAccessControl().setEntity("project-editors-" + projectNumber).setRole("OWNER"),
+          new BucketAccessControl().setEntity("project-owners-" + projectNumber).setRole("OWNER")).asJava
         val defaultObjectAcls = List(new ObjectAccessControl().setEntity("project-editors-" + projectNumber).setRole("OWNER"), new ObjectAccessControl().setEntity("project-owners-" + projectNumber).setRole("OWNER")).asJava
         val bucket = new Bucket().setName(bucketName).setAcl(bucketAcls).setDefaultObjectAcl(defaultObjectAcls)
         val inserter = storage.buckets.insert(billingProjectName, bucket)
@@ -254,13 +271,21 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
       }) { case t: HttpResponseException if t.getStatusCode == 409 => bucketName }
   }
 
-  def removePermissionsFromCromwellAuthBucket(billingProjectName: String, projectNumber: Long): Future[Unit] = {
+  private def shouldDelete(entityName: String): Boolean = {
+    !(entityName.startsWith("project-owners-") || entityName.startsWith("project-editors-"))
+  }
+
+  //removes all acls added to the cromwell auth bucket that aren't the project owner/editor ones
+  def cleanupCromwellAuthBucket(billingProjectName: String) = {
     val bucketName = cromwellAuthBucketName(billingProjectName)
     for {
-      _ <- googleRq(storage.defaultObjectAccessControls.delete(bucketName, "project-editors-" + projectNumber))
-      _ <- googleRq(storage.defaultObjectAccessControls.delete(bucketName, "project-owners-" + projectNumber))
-      _ <- googleRq(storage.bucketAccessControls.delete(bucketName, "project-editors-" + projectNumber))
-      _ <- googleRq(storage.bucketAccessControls.delete(bucketName, "project-owners-" + projectNumber))
+      oAcls <- googleRq( storage.defaultObjectAccessControls.list(bucketName) )
+      deleteOAcls = oAcls.getItems.asScala.filter(a => shouldDelete(a.getEntity))
+      _ <- Future.traverse(deleteOAcls) { d => googleRq(storage.defaultObjectAccessControls.delete(bucketName, d.getEntity)) }
+
+      bAcls <- googleRq( storage.bucketAccessControls.list(bucketName) )
+      deleteBAcls = bAcls.getItems.asScala.filter(a => shouldDelete(a.getEntity))
+      _ <- Future.traverse(deleteBAcls) { d => googleRq(storage.bucketAccessControls.delete(bucketName, d.getEntity)) }
     } yield {
       //nah
     }
@@ -289,7 +314,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
       } yield {
         //nah
       }
-    }.mapTo[Unit]
+    }.map(_ => ())
   }
 
   def removeKeysForPet(projectName: String, petEmail: String, petKeys: Seq[ServiceAccountKey]): Future[Unit] = {
@@ -299,7 +324,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
       } yield {
         //nah
       }
-    }.mapTo[Unit]
+    }.map(_ => ())
   }
 
   def createStorageLogsBucket(billingProjectName: String): Future[String] = {
