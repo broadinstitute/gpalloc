@@ -1,0 +1,44 @@
+{{with $environment := env "ENVIRONMENT"}}
+gpalloc:
+  image: broadinstitute/gpalloc:latest
+  ports:
+    - "8080:8080"
+    - "50000:50000"
+  environment:
+    MYSQL_HOST: mysql
+  volumes:
+    - /app/gpalloc.conf:/etc/gpalloc.conf
+    - /app/billing-account.pem:/etc/billing-account.pem
+  links:
+    - msyql:mysql
+
+mysql:
+  image: mysql:5.7.15
+  expose:
+    - "3306"
+  environment:
+    - MYSQL_ROOT_PASSWORD=gpalloc-test
+    - MYSQL_USER=gpalloc=test
+    - MYSQL_PASSWORD=gpalloc-test
+  volumes:
+    - /app/mysqlstore:/var/lib/mysql
+
+proxy:
+  image: broadinstitute/apache-proxy:latest
+  ports:
+    - "80:80"
+    - "443:443"
+  links:
+    - gpalloc:gpalloc
+  environment:
+    SERVER_ADMIN: dsptechops@broadinstitute.org
+    SERVER_NAME: gpalloc.dsp-techops.broadinstute.org
+    PROXY_URL: http://gpalloc:8080/
+    SSL_PROTOCOL: "-SSLv2 -SSLv3 -TLSv1 -TLSv1.1 +TLSv1.2"
+  volumes:
+    - /app/server.crt:/etc/ssl/certs/server.crt:ro
+    - /app/server.key:/etc/ssl/private/server.key:ro
+    - /app/ca-bundle.crt:/etc/ssl/certs/ca-bundle.crt:ro
+    - /app/site.conf:/etc/apache2/sites-available/site.conf:ro
+    - /etc/localtime:/etc/localtime:ro
+{{end}}

@@ -1,7 +1,8 @@
+{{with $environment := ENV "ENVIRONMENT"}}
 gcs {
   pathToBillingPem = "/etc/billing-account.pem"
   billingPemEmail = "billing@project.iam.gserviceaccount.com"
-  billingEmail = "billing@blah.firecloud.org"
+  billingEmail = "billing@{{if eq $environment "qa"}}qa{{else}}test{{end}}.firecloud.org"
   billingAccount = "billingAccounts/billing-account-id"
 }
 
@@ -25,3 +26,4 @@ liquibase {
   changelog = "org/broadinstitute/dsde/workbench/gpalloc/liquibase/changelog.xml"
   initWithLiquibase = true
 }
+{{end}}
