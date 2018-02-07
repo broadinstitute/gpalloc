@@ -36,10 +36,14 @@ object Boot extends App with LazyLogging {
     val dbRef = DbReference.init(config)
 
     val jsonFactory = JacksonFactory.getDefaultInstance
-    val clientSecrets = GoogleClientSecrets.load(jsonFactory, new StringReader(gcsConfig.getString("secrets")))
-    val googleBillingDAO = new HttpGoogleBillingDAO("gpalloc", clientSecrets, gcsConfig.getString("pathToPem"))
 
-    val projectCreationSupervisor = system.actorOf(ProjectCreationSupervisor.props("fixme-billing-account", dbRef, googleBillingDAO), "projectCreationSupervisor")
+    val googleBillingDAO = new HttpGoogleBillingDAO(
+      "gpalloc", //appName
+      gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
+      gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
+      gcsConfig.getString("billingEmail")) //billingEmail -- setServiceAccountUser
+
+    val projectCreationSupervisor = system.actorOf(ProjectCreationSupervisor.props(gcsConfig.getString("billingAccount"), dbRef, googleBillingDAO), "projectCreationSupervisor")
     projectCreationSupervisor ! ResumeAllProjects
 
     //TODO: config this 5
