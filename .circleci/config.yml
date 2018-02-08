@@ -23,11 +23,11 @@ jobs:
 
     steps:
       - checkout
-      - run
+      - run:
         name: Build docker image
         command: |
           docker build -t broadinstitute/gpalloc:$CIRCLE_BRANCH .
-      - run
+      - run:
         name: Push docker image
         command: |
           docker push broadinstitute/gpalloc:$CIRCLE_BRANCH
