@@ -37,8 +37,20 @@ jobs:
           name: Build docker image
           command: ./docker/build.sh jar -d push
 
-  deployment:
-    production:
-      branch: develop
-      commands:
-        - ./deploy.sh
+  deploy:
+    machine: true
+    steps:
+      - run: ./deploy.sh
+
+
+workflows:
+  version: 2
+  build-deploy:
+    jobs:
+      - build
+      - deploy
+          filters:
+            requires:
+              - build
+            branches:
+              only: develop
