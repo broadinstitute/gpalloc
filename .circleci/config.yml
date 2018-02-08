@@ -22,9 +22,14 @@ jobs:
       JVM_OPTS: -Xmx3200m
       TERM: dumb
       BRANCH: $CIRCLE_BRANCH
+      SSHCMD: ssh -o UserKnownHostsFile=/dev/null -o CheckHostIP=no -o StrictHostKeyChecking=no
+      SSH_USER: circleci
+      SSH_HOST: 35.224.240.188
+
 
     steps:
       - checkout
+      - run: ssh -i ~/.
       - run:
           name: Docker login
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
@@ -32,8 +37,8 @@ jobs:
           name: Build docker image
           command: ./docker/build.sh jar -d push
 
-#  deployment:
-#    production:
-#      branch: develop
-#      commands:
-#        - ./deploy.sh
+  deployment:
+    production:
+      branch: develop
+      commands:
+        - ./deploy.sh
