@@ -29,7 +29,6 @@ jobs:
 
     steps:
       - checkout
-      - run: ssh -i ~/.
       - run:
           name: Docker login
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
