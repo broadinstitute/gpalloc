@@ -1,8 +1,10 @@
+{{with $environment := ENV "ENVIRONMENT"}}
+{{with $billingPemSecrets := vault (printf "secret/dsde/firecloud/%s/common/billing-account.pem" $environment)}}
 gcs {
   pathToBillingPem = "/etc/billing-account.pem"
-  billingPemEmail = "billing@project.iam.gserviceaccount.com"
-  billingEmail = "billing@blah.firecloud.org"
-  billingAccount = "billingAccounts/billing-account-id"
+  billingPemEmail = "{{$billingPemSecrets.Data.client_email}}"
+  billingEmail = "billing@{{if eq $environment "qa"}}qa{{else}}test{{end}}.firecloud.org"
+  billingAccount = "billingAccounts/00708C-45D19D-27AAFA"
 }
 
 mysql {
@@ -25,3 +27,4 @@ liquibase {
   changelog = "org/broadinstitute/dsde/workbench/gpalloc/liquibase/changelog.xml"
   initWithLiquibase = true
 }
+{{end}}{{end}}
