@@ -48,17 +48,12 @@ function docker_cmd()
             DOCKER_TAG=${GIT_SHA:0:12}
         fi
 
-        echo "building $PROJECT-tests docker image..."
         docker build -t $REPO:${DOCKER_TAG} .
-        cd automation
-        docker build -f Dockerfile-tests -t $TESTS_REPO:${DOCKER_TAG} .
-        cd ..
+
 
         if [ $DOCKER_CMD = "push" ]; then
             echo "pushing $PROJECT docker image..."
             docker push $REPO:${DOCKER_TAG}
-            echo "pushing $PROJECT-tests docker image..."
-            docker push $TESTS_REPO:${DOCKER_TAG}
         fi
     else
         echo "Not a valid docker option!  Choose either build or push (which includes build)"
@@ -69,7 +64,6 @@ function docker_cmd()
 DOCKER_CMD=
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}  # default to current branch
 REPO=${REPO:-broadinstitute/$PROJECT} # default to gpalloc docker repo
-TESTS_REPO=$REPO-tests
 ENV=${ENV:-""}  # if env is not set, push an image with branch name
 
 if [ -z "$1" ]; then

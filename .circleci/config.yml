@@ -20,15 +20,13 @@ jobs:
       # Customize the JVM maximum heap limit
       JVM_OPTS: -Xmx3200m
       TERM: dumb
+      BRANCH: $CIRCLE_BRANCH
 
     steps:
       - checkout
       - run:
           name: Build docker image
-          command: docker build -t broadinstitute/gpalloc:$CIRCLE_BRANCH .
-      - run:
-          name: Push docker image
-          command: docker push broadinstitute/gpalloc:$CIRCLE_BRANCH
+          command: ./docker/build.sh jar -d push
 
 #  deployment:
 #    production:
