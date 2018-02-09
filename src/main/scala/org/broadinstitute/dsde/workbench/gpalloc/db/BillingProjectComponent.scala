@@ -71,7 +71,7 @@ trait BillingProjectComponent extends GPAllocComponent {
     }
 
     private[db] def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
-      (billingProjectQuery  += BillingProjectRecord(billingProject, None, status, None)) map { _ =>
+      (billingProjectQuery += BillingProjectRecord(billingProject, None, status, None)) map { _ =>
         billingProject
       }
     }

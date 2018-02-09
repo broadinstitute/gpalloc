@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.gpalloc
 import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.{TestActorRef, TestKit, TestProbe}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
-import org.broadinstitute.dsde.workbench.gpalloc.db.{DbReference, DbSingleton, TestComponent}
+import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference, DbSingleton, TestComponent}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
 import org.broadinstitute.dsde.workbench.gpalloc.service.{GPAllocService, GoogleProjectNotFound, NoGoogleProjectAvailable, NotYourGoogleProject}
@@ -14,14 +14,15 @@ import org.scalatest.concurrent.Eventually._
 import scala.concurrent.duration._
 
 class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
+  import profile.api._
 
   //returns a service and a probe that watches the pretend supervisor actor
-  def gpAllocService(dbRef: DbReference, projectCreationThreshold: Int): (GPAllocService, TestProbe, MockGoogleDAO) = {
+  def gpAllocService(dbRef: DbReference, projectCreationThreshold: Int, abandonmentTime: Duration = 20 hours): (GPAllocService, TestProbe, MockGoogleDAO) = {
     val mockGoogleDAO = new MockGoogleDAO()
     val probe = TestProbe()
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
-    (new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, 0, 20 hours), probe, mockGoogleDAO)
+    (new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, projectCreationThreshold, abandonmentTime), probe, mockGoogleDAO)
   }
 
   "GPAllocService" should "request an existing google project" in isolatedDbTest {
@@ -129,5 +130,24 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     releaseExc shouldBe a [GoogleProjectNotFound]
     mockGoogleDAO.scrubbedProjects shouldBe 'empty
   }
-}
 
+  it should "clean up abandoned projects" in isolatedDbTest {
+    //add some projects, one abandoned, one not
+    dbFutureValue { _.billingProjectQuery += assignedBillingProjectRecord(newProjectName, userInfo.userEmail, 1 hour) }
+    dbFutureValue { _.billingProjectQuery += assignedBillingProjectRecord(newProjectName2, userInfo.userEmail, 1 minute) }
+
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, 30 minutes)
+
+    //this should clean up newProjectName but not newProjectName2
+    gpAlloc.releaseAbandonedProjects()
+
+    eventually {
+      //flipping the database back to Unassigned happens in a separate future to
+      //the one returned by releaseGoogleProject, so we need to wait a bit here
+      dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
+    }
+
+    //shoulda scrubbed google
+    mockGoogleDAO.scrubbedProjects should contain theSameElementsAs Set(newProjectName)
+  }
+}

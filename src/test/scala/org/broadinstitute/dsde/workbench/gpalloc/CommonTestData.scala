@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.util.NoopActor
 import org.scalactic.Equality
 import org.scalatest.concurrent.ScalaFutures
 
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.Random
 
 object CommonTestData {
@@ -70,6 +71,10 @@ trait CommonTestData {
 
   def freshBillingProjectRecord(projectName: String): BillingProjectRecord = {
     BillingProjectRecord(projectName, None, BillingProjectStatus.CreatingProject, None)
+  }
+
+  def assignedBillingProjectRecord(projectName: String, owner: WorkbenchEmail, ago: FiniteDuration): BillingProjectRecord = {
+    BillingProjectRecord(projectName, Some(owner.value), BillingProjectStatus.Assigned, Some(Timestamp.from(Instant.now().minusMillis(ago.toMillis))))
   }
 
   def freshOpRecord(projectName: String): ActiveOperationRecord = {

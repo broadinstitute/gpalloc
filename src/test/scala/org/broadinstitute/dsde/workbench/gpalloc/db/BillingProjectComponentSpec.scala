@@ -4,9 +4,10 @@ import org.broadinstitute.dsde.workbench.gpalloc.CommonTestData
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.scalatest.FlatSpecLike
 import org.scalatest.concurrent.ScalaFutures
+import scala.concurrent.duration._
 
 class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with CommonTestData {
-  import profile._
+  import profile.api._
   import CommonTestData.BillingProjectRecordEquality._
 
   "BillingProjectComponent" should "list, save, get, and update" in isolatedDbTest {
@@ -85,6 +86,17 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     dbFutureValue { _.billingProjectQuery.getCreatingProjects } should contain theSameElementsAs Seq(
       freshBillingProjectRecord(newProjectName),
       freshBillingProjectRecord(newProjectName2)
+    )
+  }
+
+  it should "get abandoned projects" in isolatedDbTest {
+    //add some projects, one abandoned, one not
+    val abandonedProject = assignedBillingProjectRecord(newProjectName, userInfo.userEmail, 1 hour)
+    dbFutureValue { _.billingProjectQuery += abandonedProject }
+    dbFutureValue { _.billingProjectQuery += assignedBillingProjectRecord(newProjectName2, userInfo.userEmail, 1 minute) }
+
+    dbFutureValue { _.billingProjectQuery.getAbandonedProjects(30 minutes) } should contain theSameElementsAs Seq(
+      assignedBillingProjectRecord(newProjectName, userInfo.userEmail, 1 hour)
     )
   }
 }
