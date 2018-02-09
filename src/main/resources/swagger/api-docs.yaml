@@ -102,8 +102,8 @@ definitions:
   Project:
     description: ''
     required:
-      -projectName
-      -cromwellAuthBucketUrl
+      - projectName
+      - cromwellAuthBucketUrl
     properties:
       projectName:
         type: string
