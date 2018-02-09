@@ -15,6 +15,11 @@ if [ -z "${SSH_HOST}" ]; then
     exit 3
 fi
 
+if [ -z "${ENV}" ]; then
+    echo "FATAL ERROR: ENV undefined."
+    exit 4
+fi
+
 
 PROJECT=gpalloc
 COMPOSE_FILE=docker-compose.yml
@@ -29,6 +34,7 @@ docker run --rm -v $PWD:/working -w /working \
     -e INPUT_DIR=/working/configs \
     -e OUTPUT_DIR=/working/app \
     -e IMAGE=$BRANCH \
+    -e ENV=$ENV \
     broadinstitute/dsde-toolbox:dev configure.rb -y
 
 scp -r $SSHOPTS app/* $SSH_USER@$SSH_HOST:/app
