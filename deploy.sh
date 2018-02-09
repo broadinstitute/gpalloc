@@ -22,13 +22,18 @@ fi
 
 PROJECT=gpalloc
 COMPOSE_FILE=docker-compose.yml
+VAULT_TOKEN=$(cat /etc/vault-token-dsde)
+OUTPUT_DIR=app
+INPUT_DIR=configs
 
-# Copy over configs & render certs from vault
-# TODO: render configs and copy them onto host
-#docker run -e VAULT_TOKEN=$VAULT_TOKEN broadinstitute/dsde-toolbox vault read secret/dsde/dsp-techops/common/server.crt
-#docker run -e VAULT_TOKEN=$VAULT_TOKEN broadinstitute/dsde-toolbox vault read secret/dsde/dsp-techops/common/server.key
-#docker run -e VAULT_TOKEN=$VAULT_TOKEN broadinstitute/dsde-toolbox vault read secret/dsde/dsp-techops/common/ca-bundle.crt
-# TODO: pull billing acct from vault
+docker run --rm -v $PWD:/working -w /working \
+    -e APP_NAME=$PROJECT \
+    -e VAULT_TOKEN=$VAULT_TOKEN \
+    -e INPUT_DIR=/working/configs \
+    -e OUTPUT_DIR=/working/app \
+    broadinstitute/dsde-toolbox:dev configure.rb -y
+
+scp -r $SSHOPTS app/* $SSH_USER@$SSH_HOST:/app
 
 
 # Start new application container with the current version
