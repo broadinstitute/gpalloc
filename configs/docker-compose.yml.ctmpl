@@ -1,4 +1,5 @@
 {{with $environment := env "ENVIRONMENT"}}
+{{with $environment := env "IMAGE"}}
 gpalloc:
   image: broadinstitute/gpalloc:latest
   ports:
@@ -41,4 +42,5 @@ proxy:
     - /app/ca-bundle.crt:/etc/ssl/certs/ca-bundle.crt:ro
     - /app/site.conf:/etc/apache2/sites-available/site.conf:ro
     - /etc/localtime:/etc/localtime:ro
+{{end}}
 {{end}}

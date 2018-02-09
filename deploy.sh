@@ -21,12 +21,14 @@ COMPOSE_FILE=docker-compose.yml
 VAULT_TOKEN=$(cat /etc/vault-token-dsde)
 OUTPUT_DIR=app
 INPUT_DIR=configs
+BRANCH=${BRANCH:-latest}
 
 docker run --rm -v $PWD:/working -w /working \
     -e APP_NAME=$PROJECT \
     -e VAULT_TOKEN=$VAULT_TOKEN \
     -e INPUT_DIR=/working/configs \
     -e OUTPUT_DIR=/working/app \
+    -e IMAGE=$BRANCH \
     broadinstitute/dsde-toolbox:dev configure.rb -y
 
 scp -r $SSHOPTS app/* $SSH_USER@$SSH_HOST:/app
