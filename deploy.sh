@@ -15,10 +15,6 @@ if [ -z "${SSH_HOST}" ]; then
     exit 3
 fi
 
-if [ -z "${VAULT_TOKEN}" ]; then
-    echo "FATAL ERROR: VAULT_TOKEN undefined."
-    exit 4
-fi
 
 PROJECT=gpalloc
 COMPOSE_FILE=docker-compose.yml
