@@ -1,4 +1,4 @@
-{{with $environment := ENV "ENVIRONMENT"}}
+{{with $environment := ENV "ENV"}}
 {{with $billingPemSecrets := vault (printf "secret/dsde/firecloud/%s/common/billing-account.pem" $environment)}}
 gcs {
   pathToBillingPem = "/etc/billing-account.pem"

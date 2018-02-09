@@ -1,30 +1,24 @@
-# Scala CircleCI 2.0 configuration file
-#
-# Check https://circleci.com/docs/2.0/sample-config/ for more details
-#
+# CircleCI 2.0 configuration file
 version: 2
 jobs:
-  build:
+  jar-build:
     machine: true
-#    docker:
-#      # specify the version you desire here
-#      - image: circleci/openjdk:8-jdk
-
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
     working_directory: ~/repo
 
     environment:
       # Customize the JVM maximum heap limit
       JVM_OPTS: -Xmx3200m
       TERM: dumb
-      SSHCMD: ssh -o UserKnownHostsFile=/dev/null -o CheckHostIP=no -o StrictHostKeyChecking=no
-      SSH_USER: circleci
-      SSH_HOST: 35.224.240.188
 
+    steps:
+      - checkout
+      - run:
+          name: Build jar
+          command: BRANCH=$CIRCLE_BRANCH ./docker/build.sh jar
+
+  docker-build:
+    machine: true
+    working_directory: ~/repo
 
     steps:
       - checkout
@@ -33,5 +27,24 @@ jobs:
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
       - run:
           name: Build docker image
-          command: BRANCH=$CIRCLE_BRANCH ./docker/build.sh jar -d push
-      - run: ./deploy.sh
+          command: if [ $CIRCLE_BRANCH = "master" ]; then BRANCH=$CIRCLE_BRANCH ./doocker/build.sh -d push; fi
+
+# TODO: trigger jenkins deploy eventually, depending on branch
+#  deploy:
+#    machine: true
+#    working_directory: ~/repo
+#    steps:
+#      - curl
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - jar-build
+      - docker-build:
+          requires:
+            - jar-build
+          filters:
+            branches:
+              only:
+                - master, develop
