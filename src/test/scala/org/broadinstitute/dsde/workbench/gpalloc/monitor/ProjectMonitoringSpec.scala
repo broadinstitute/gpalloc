@@ -19,7 +19,7 @@ import scala.concurrent.duration._
 class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
 
   def withSupervisor[T](gDAO: GoogleDAO)(op: ActorRef => T): T = {
-    val supervisor = system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, 10 millis, this), "testProjectCreationSupervisor")
+    val supervisor = system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, 10 millis, 20 hours, this), "testProjectCreationSupervisor")
     val result = op(supervisor)
     supervisor ! PoisonPill
     result

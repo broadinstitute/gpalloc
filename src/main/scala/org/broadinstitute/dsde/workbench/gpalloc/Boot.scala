@@ -8,12 +8,13 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.gpalloc.api.{GPAllocRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.ResumeAllProjects
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
+
+import scala.concurrent.duration._
 
 object Boot extends App with LazyLogging {
 
@@ -28,6 +29,9 @@ object Boot extends App with LazyLogging {
     implicit val materializer = ActorMaterializer()
     import scala.concurrent.ExecutionContext.Implicits.global
 
+    val gcsConfig = config.getConfig("gcs")
+    val gpAllocConfig = config.as[GPAllocConfig]("gpAlloc")
+
     val dbRef = DbReference.init(config)
 
     val jsonFactory = JacksonFactory.getDefaultInstance
@@ -38,11 +42,13 @@ object Boot extends App with LazyLogging {
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail")) //billingEmail -- setServiceAccountUser
 
-    val projectCreationSupervisor = system.actorOf(ProjectCreationSupervisor.props(gcsConfig.getString("billingAccount"), dbRef, googleBillingDAO), "projectCreationSupervisor")
+    val projectCreationSupervisor = system.actorOf(
+      ProjectCreationSupervisor.props(gcsConfig.getString("billingAccount"), dbRef, googleBillingDAO, gpAllocConfig.projectMonitorPollInterval, gpAllocConfig.abandonmentSweepInterval),
+      "projectCreationSupervisor")
     projectCreationSupervisor ! ResumeAllProjects
 
     //TODO: config this 5
-    val gpAllocService = new GPAllocService(dbRef, swaggerConfig, projectCreationSupervisor, googleBillingDAO, 5)
+    val gpAllocService = new GPAllocService(dbRef, swaggerConfig, projectCreationSupervisor, googleBillingDAO, 5, gpAllocConfig.abandonmentTime)
     val gpallocRoutes = new GPAllocRoutes(gpAllocService, swaggerConfig) with StandardUserInfoDirectives
 
       Http().bindAndHandle(gpallocRoutes.route, "0.0.0.0", 8080)

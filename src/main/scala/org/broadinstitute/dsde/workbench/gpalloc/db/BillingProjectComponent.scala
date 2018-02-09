@@ -6,6 +6,8 @@ import java.time.Instant
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 
+import scala.concurrent.duration.Duration
+
 case class BillingProjectRecord(billingProjectName: String,
                                 owner: Option[String],
                                 status: BillingProjectStatus,
@@ -99,6 +101,13 @@ trait BillingProjectComponent extends GPAllocComponent {
 
     def countUnassignedProjects: DBIO[Int] = {
       billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).length.result
+    }
+
+    def getAbandonedProjects(abandonmentTime: Duration): DBIO[Seq[BillingProjectRecord]] = {
+      billingProjectQuery
+        .filter(_.status === BillingProjectStatus.Assigned.toString)
+        .filter(bp => bp.lastAssignedTime < Timestamp.from(Instant.now().minusMillis(abandonmentTime.toMillis)) )
+        .result
     }
 
     //Does nothing if your project isn't in Assigned.
