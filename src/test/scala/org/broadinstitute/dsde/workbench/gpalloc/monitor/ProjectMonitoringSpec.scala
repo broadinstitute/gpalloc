@@ -76,7 +76,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     //project should have correct status
     val bp = dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }
     bp shouldBe 'defined
-    bp.get shouldBe BillingProjectRecord(newProjectName, None, CreatingProject)
+    bp.get shouldEqual BillingProjectRecord(newProjectName, None, CreatingProject, None)
 
     val creatingOps = dbFutureValue { _.operationQuery.getOperations(newProjectName) }
     creatingOps.size shouldBe 1
@@ -102,7 +102,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     //project should have correct status
     val bp = dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }
     bp shouldBe 'defined
-    bp.get shouldBe BillingProjectRecord(newProjectName, None, EnablingServices)
+    bp.get shouldBe BillingProjectRecord(newProjectName, None, EnablingServices, None)
 
     //check it's made some ops
     val enablingOps = dbFutureValue { _.operationQuery.getOperations(newProjectName) }
@@ -134,7 +134,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     //project should have correct status
     val bp = dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }
     bp shouldBe 'defined
-    bp.get shouldBe BillingProjectRecord(newProjectName, None, Unassigned)
+    bp.get shouldBe BillingProjectRecord(newProjectName, None, Unassigned, None)
   }
 
   it should "poll for active operations" in isolatedDbTest {
