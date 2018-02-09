@@ -30,6 +30,7 @@ jobs:
     steps:
       - checkout
       - run: echo $BRANCH
+      - run: echo $CIRLCE_BRANCH
 #      - run:
 #          name: Docker login
 #          command: docker login -u $DOCKER_USER -p $DOCKER_PASS
