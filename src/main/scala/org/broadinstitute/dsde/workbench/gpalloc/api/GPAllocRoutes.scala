@@ -12,6 +12,7 @@ import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, Logg
 import akka.stream.Materializer
 import akka.stream.scaladsl._
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.gpalloc.errorReportSource
 import org.broadinstitute.dsde.workbench.gpalloc.model.GPAllocJsonSupport._
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
@@ -21,9 +22,12 @@ import org.broadinstitute.dsde.workbench.gpalloc.service._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
+abstract class GPAllocRoutes(val gpAllocService: GPAllocService, val swaggerConfig: SwaggerConfig)
+                            (implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
   extends LazyLogging
-    with UserInfoDirectives {
+    with UserInfoDirectives
+    with SwaggerRoutes
+{
 
   lazy val unauthedRoutes: Route =
     path("ping") {
@@ -62,7 +66,7 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService)(implicit val sy
 
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
-    unauthedRoutes ~ gpAllocRoutes
+    unauthedRoutes ~ gpAllocRoutes ~ swaggerRoutes
   }
 
   private val myExceptionHandler = {

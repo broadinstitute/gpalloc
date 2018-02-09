@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.service
 
 import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
+import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
@@ -21,6 +22,7 @@ case class GoogleProjectNotFound(project: String)
   extends GPAllocException(s"$project not found", StatusCodes.NotFound)
 
 class GPAllocService(protected val dbRef: DbReference,
+                     protected val swaggerConfig: SwaggerConfig,
                      projectCreationSupervisor: ActorRef,
                      googleBillingDAO: GoogleDAO,
                      projectCreationThreshold: Int)
