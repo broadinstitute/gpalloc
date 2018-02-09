@@ -21,7 +21,6 @@ jobs:
       # Customize the JVM maximum heap limit
       JVM_OPTS: -Xmx3200m
       TERM: dumb
-      BRANCH: ${CIRCLE_BRANCH}
       SSHCMD: ssh -o UserKnownHostsFile=/dev/null -o CheckHostIP=no -o StrictHostKeyChecking=no
       SSH_USER: circleci
       SSH_HOST: 35.224.240.188
@@ -29,12 +28,10 @@ jobs:
 
     steps:
       - checkout
-      - run: echo $BRANCH
-      - run: echo $CIRCLE_BRANCH
-#      - run:
-#          name: Docker login
-#          command: docker login -u $DOCKER_USER -p $DOCKER_PASS
-#      - run:
-#          name: Build docker image
-#          command: ./docker/build.sh jar -d push
-#      - run: ./deploy.sh
+      - run:
+          name: Docker login
+          command: docker login -u $DOCKER_USER -p $DOCKER_PASS
+      - run:
+          name: Build docker image
+          command: BRANCH=$CIRCLE_BRANCH ./docker/build.sh jar -d push
+      - run: ./deploy.sh
