@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 if [ -z "${SSHCMD}" ]; then
     echo "FATAL ERROR: SSHCMD undefined."
     exit 1
@@ -35,7 +37,7 @@ docker run --rm -v $PWD:/working -w /working \
     -e OUTPUT_DIR=/working/app \
     -e IMAGE=$IMAGE \
     -e ENV=$ENV \
-    broadinstitute/dsde-toolbox:dev ruby configure.rb -y
+    broadinstitute/dsde-toolbox:dev configure.rb -y
 
 scp -r $SSHOPTS app/* $SSH_USER@$HOST:/app
 
