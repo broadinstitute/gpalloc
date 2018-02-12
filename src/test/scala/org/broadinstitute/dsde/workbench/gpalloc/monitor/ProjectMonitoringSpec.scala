@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, TestC
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationMonitor._
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.RequestNewProject
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 import org.scalatest.FlatSpecLike
 import org.scalatest.concurrent.Eventually._
@@ -26,7 +26,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
   import profile.api._
 
   def withSupervisor[T](gDAO: GoogleDAO)(op: ActorRef => T): T = {
-    val supervisor = system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, 10 millis, 20 hours, this), "testProjectCreationSupervisor")
+    val supervisor = system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, gpAllocConfig, this), "testProjectCreationSupervisor")
     val result = op(supervisor)
     supervisor ! PoisonPill
     result
@@ -40,7 +40,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     val mockGoogleDAO = new MockGoogleDAO()
 
     withSupervisor(mockGoogleDAO) { supervisor =>
-      supervisor ! CreateProject(newProjectName)
+      supervisor ! RequestNewProject(newProjectName)
 
       //we're now racing against the project monitor actor, so everything from here on is eventually
       eventually {
@@ -209,7 +209,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
       val createdOp = freshOpRecord(newProjectName)
       dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
 
-      supervisor ! CreateProject(newProjectName)
+      supervisor ! RequestNewProject(newProjectName)
 
       expectMsgClass(1 second, classOf[Terminated])
     }

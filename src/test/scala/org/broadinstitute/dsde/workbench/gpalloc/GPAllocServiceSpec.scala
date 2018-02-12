@@ -5,7 +5,7 @@ import akka.testkit.{TestActorRef, TestKit, TestProbe}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference, DbSingleton, TestComponent}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{CreateProject, RegisterGPAllocService}
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RequestNewProject, RegisterGPAllocService}
 import org.broadinstitute.dsde.workbench.gpalloc.service.{GPAllocService, GoogleProjectNotFound, NoGoogleProjectAvailable, NotYourGoogleProject}
 import org.broadinstitute.dsde.workbench.util.NoopActor
 import org.scalatest.FlatSpecLike
@@ -17,12 +17,12 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   import profile.api._
 
   //returns a service and a probe that watches the pretend supervisor actor
-  def gpAllocService(dbRef: DbReference, projectCreationThreshold: Int, abandonmentTime: Duration = 20 hours): (GPAllocService, TestProbe, MockGoogleDAO) = {
+  def gpAllocService(dbRef: DbReference, minimumFreeProjects: Int, abandonmentTime: Duration = 20 hours): (GPAllocService, TestProbe, MockGoogleDAO) = {
     val mockGoogleDAO = new MockGoogleDAO()
     val probe = TestProbe()
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
-    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, projectCreationThreshold, abandonmentTime)
+    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, minimumFreeProjects, abandonmentTime)
     probe.expectMsgClass(1 seconds, classOf[RegisterGPAllocService])
     (gpAlloc, probe, mockGoogleDAO)
   }
@@ -32,31 +32,55 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
 
-    //make a service with a project creation threshold of 0 to trigger making a new one once this one is alloc'd
-    val (gpAlloc, probe, _) = gpAllocService(dbRef, 0)
+    //make a service with a project creation threshold of 1 to trigger making a new one once this one is alloc'd
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 1)
 
     val assignedProject = gpAlloc.requestGoogleProject(userInfo).futureValue
     assignedProject shouldEqual toAssignedProject(newProjectName)
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[CreateProject])
+    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
 
     //no more unassigned projects!
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
   }
 
-  it should "barf when you request a google project but there are none in the pool" in isolatedDbTest {
-    //make a service with a project creation threshold of 0 to trigger making a new one once this one is alloc'd
-    dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
-    val (gpAlloc, probe, _) = gpAllocService(dbRef, 0)
-
-    val noProjectExc = gpAlloc.requestGoogleProject(userInfo).failed.futureValue
-    noProjectExc shouldBe a [NoGoogleProjectAvailable]
+  it should "wake up and create new projects where necessary" in isolatedDbTest {
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 2)
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[CreateProject])
+    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+  }
+
+  it should "not keep creating projects indefinitely if enough creating ones are in-flight" in isolatedDbTest {
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName2
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 2)
+
+    //maybeCreateNewProjects shouldn't create projects here because we've got 2 being created
+    probe.expectNoMsg()
+  }
+
+  it should "barf when you request a google project but there are none in the pool" in isolatedDbTest {
+    //make a service with a project creation threshold of 1 to trigger making a new one once this one is alloc'd
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 1)
+
+    //give me one as usual...
+    val assignedProject = gpAlloc.requestGoogleProject(userInfo).futureValue
+    assignedProject shouldEqual toAssignedProject(newProjectName)
+
+    //should hit the threshold and ask the supervisor to create a project
+    //(but this won't really do anything because the supervisor is a fake)
+    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+
+    //give me another! no :(
+    val noProjectExc = gpAlloc.requestGoogleProject(userInfo).failed.futureValue
+    noProjectExc shouldBe a [NoGoogleProjectAvailable]
 
     //still no projects (because the supervisor is fake)
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
@@ -68,8 +92,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 2
 
-    //after assigning a project, we'll have 1 left, so a threshold of 0 means we shouldn't create another
-    val (gpAlloc, probe, _) = gpAllocService(dbRef, 0)
+    //after assigning a project, we'll have 1 left, so a threshold of 1 means we shouldn't create another
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 1)
 
     val assignedProject = gpAlloc.requestGoogleProject(userInfo).futureValue
     Seq(toAssignedProject(newProjectName), toAssignedProject(newProjectName2)) should contain(assignedProject)
@@ -89,6 +113,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
 
+    //here we have no minimum free projects. it's okay for us to just run out
+    //this is completely unrealistic but means we have to jump through fewer hoops in the test
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0)
 
     gpAlloc.releaseGoogleProject(userInfo.userEmail, newProjectName).futureValue
@@ -108,6 +134,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
 
+    //here we have no minimum free projects. it's okay for us to just run out
+    //this is completely unrealistic but means we have to jump through fewer hoops in the test
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0)
 
     val releaseExc = gpAlloc.releaseGoogleProject(badUserInfo.userEmail, newProjectName).failed.futureValue
@@ -117,6 +145,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   }
 
   it should "not let you release a project that doesn't exist" in isolatedDbTest {
+    //here we have no minimum free projects. it's okay for us to just run out
+    //this is completely unrealistic but means we have to jump through fewer hoops in the test
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0)
     val releaseExc = gpAlloc.releaseGoogleProject(userInfo.userEmail, "nonexistent").failed.futureValue
     releaseExc shouldBe a [GoogleProjectNotFound]
@@ -127,6 +157,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     //add an unassigned one
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName
 
+    //here we have no minimum free projects. it's okay for us to just run out
+    //this is completely unrealistic but means we have to jump through fewer hoops in the test
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0)
     val releaseExc = gpAlloc.releaseGoogleProject(userInfo.userEmail, newProjectName).failed.futureValue
     releaseExc shouldBe a [GoogleProjectNotFound]
@@ -138,6 +170,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery += assignedBillingProjectRecord(newProjectName, userInfo.userEmail, 1 hour) }
     dbFutureValue { _.billingProjectQuery += assignedBillingProjectRecord(newProjectName2, userInfo.userEmail, 1 minute) }
 
+    //here we have no minimum free projects. it's okay for us to just run out
+    //this is completely unrealistic but means we have to jump through fewer hoops in the test
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, 30 minutes)
 
     //this should clean up newProjectName but not newProjectName2

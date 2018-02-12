@@ -7,7 +7,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
+import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, BillingProjectRecord, DbReference, DbSingleton}
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus}
@@ -68,6 +68,7 @@ trait CommonTestData {
 
   val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
   val swaggerConfig = config.as[SwaggerConfig]("swagger")
+  val gpAllocConfig = config.as[GPAllocConfig]("gpalloc")
 
   def freshBillingProjectRecord(projectName: String): BillingProjectRecord = {
     BillingProjectRecord(projectName, None, BillingProjectStatus.CreatingProject, None)
