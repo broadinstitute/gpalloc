@@ -15,13 +15,21 @@ jobs:
       - run:
           name: Build jar
           command: BRANCH=$CIRCLE_BRANCH ./docker/build.sh jar
+      - persist_to_workspace
+          root: .
+          paths:
+            - *
 
   docker-build:
     machine: true
     working_directory: ~/repo
 
     steps:
-      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: ls
+          command: ls
       - run:
           name: Docker login
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
@@ -49,3 +57,4 @@ workflows:
               only:
                 - master
                 - develop
+                - jr-save-jar
