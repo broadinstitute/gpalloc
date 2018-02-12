@@ -20,6 +20,9 @@ object ProjectCreationSupervisor {
   case class RegisterGPAllocService(service: GPAllocService) extends ProjectCreationSupervisorMessage
   case object SweepAbandonedProjects extends ProjectCreationSupervisorMessage
 
+  //secret message that only we send to ourselves
+  protected[monitor] case class CreateProject(projectName: String) extends ProjectCreationSupervisorMessage
+
   def props(billingAccount: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
@@ -33,9 +36,6 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   with LazyLogging {
 
   import context._
-
-  //secret message that only we send to ourselves
-  protected case class CreateProject(projectName: String) extends ProjectCreationSupervisorMessage
 
   //yes this is deprecated. no i'm not going to move to akka streams
   val throttler = system.actorOf(Props(classOf[TimerBasedThrottler], gpAllocConfig.projectsPerHourThrottle msgsPer 1.hour))

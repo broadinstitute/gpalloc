@@ -6,12 +6,13 @@ import java.time.Instant
 import akka.actor.{ActorRef, ActorSystem, PoisonPill, Terminated}
 import akka.testkit.{TestActorRef, TestKit, TestProbe}
 import org.broadinstitute.dsde.workbench.gpalloc.CommonTestData
+import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, MockGoogleDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, TestComponent}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationMonitor._
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.RequestNewProject
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 import org.scalatest.FlatSpecLike
 import org.scalatest.concurrent.Eventually._
@@ -25,7 +26,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
   import profile.api._
 
-  def withSupervisor[T](gDAO: GoogleDAO)(op: ActorRef => T): T = {
+  def withSupervisor[T](gDAO: GoogleDAO, gpAllocConfig: GPAllocConfig = gpAllocConfig)(op: ActorRef => T): T = {
     val supervisor = system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, gpAllocConfig, this), "testProjectCreationSupervisor")
     val result = op(supervisor)
     supervisor ! PoisonPill
@@ -87,11 +88,30 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     withSupervisor(mockGoogleDAO) { supervisor =>
       //this will call RegisterGPAllocService in the supervisor, kicking off a sweep
-      new GPAllocService(dbRef, swaggerConfig, supervisor, mockGoogleDAO, 100, 2 hours)
+      new GPAllocService(dbRef, swaggerConfig, supervisor, mockGoogleDAO, 0, 2 hours)
 
       eventually {
         dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }.get.status shouldBe Unassigned
       }
+    }
+  }
+
+  it should "throttle project creation" in isolatedDbTest {
+    val mockGoogleDAO = new MockGoogleDAO()
+    withSupervisor(mockGoogleDAO) { supervisor =>
+
+      //kick off a project create. this should prevent another create from happening for another second
+      supervisor ! RequestNewProject(newProjectName)
+
+      //TODO: maybe subclass the supervisor and log the times at which createProject is called?
+      //yeah that seems good
+      assert(false, "this test doesn't make sense yet")
+
+      //FIXME: below doesn't work because testkit is watching the monitors, not the supervisor
+      expectMsgClass(2 seconds, classOf[CreateProject])
+      supervisor ! RequestNewProject(newProjectName2)
+      expectNoMsg(500 millis)
+      expectMsgClass(1 second, classOf[CreateProject])
     }
   }
 
