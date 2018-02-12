@@ -5,7 +5,7 @@ import akka.testkit.{TestActorRef, TestKit, TestProbe}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference, DbSingleton, TestComponent}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{CreateProject, RegisterGPAllocService}
 import org.broadinstitute.dsde.workbench.gpalloc.service.{GPAllocService, GoogleProjectNotFound, NoGoogleProjectAvailable, NotYourGoogleProject}
 import org.broadinstitute.dsde.workbench.util.NoopActor
 import org.scalatest.FlatSpecLike
@@ -22,7 +22,9 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     val probe = TestProbe()
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
-    (new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, projectCreationThreshold, abandonmentTime), probe, mockGoogleDAO)
+    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, projectCreationThreshold, abandonmentTime)
+    probe.expectMsgClass(1 seconds, classOf[RegisterGPAllocService])
+    (gpAlloc, probe, mockGoogleDAO)
   }
 
   "GPAllocService" should "request an existing google project" in isolatedDbTest {
