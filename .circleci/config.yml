@@ -15,10 +15,11 @@ jobs:
       - run:
           name: Build jar
           command: BRANCH=$CIRCLE_BRANCH ./docker/build.sh jar
+      - run: mkdir gpalloc && cp ./gpalloc*.jar ./gpalloc
       - persist_to_workspace:
           root: ~/repo
           paths:
-            - ~/repo
+            - gpalloc/
 
   docker-build:
     machine: true
@@ -26,7 +27,7 @@ jobs:
 
     steps:
       - attach_workspace:
-          at: .
+          at: ./gpalloc
       - run:
           name: ls
           command: ls
