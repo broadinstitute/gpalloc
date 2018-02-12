@@ -2,6 +2,9 @@ package org.broadinstitute.dsde.workbench.gpalloc
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import com.typesafe.config.ConfigFactory
+import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, BillingProjectRecord, DbReference, DbSingleton}
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus}
@@ -23,6 +26,10 @@ trait CommonTestData { this: ScalaFutures =>
   val badUserInfo = UserInfo(OAuth2BearerToken("ya29.bwahaha"), WorkbenchUserId("0000000000"), WorkbenchEmail(badUser), 60)
 
   val dbRef = DbSingleton.ref
+
+  val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
+  val gcsConfig = config.getConfig("gcs")
+  val swaggerConfig = config.as[SwaggerConfig]("swagger")
 
   def freshBillingProjectRecord(projectName: String): BillingProjectRecord = {
     BillingProjectRecord(projectName, None, BillingProjectStatus.CreatingProject)

@@ -21,7 +21,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     val probe = TestProbe()
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
-    (new GPAllocService(dbRef, probe.ref, mockGoogleDAO, 0), probe, mockGoogleDAO)
+    (new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, 0), probe, mockGoogleDAO)
   }
 
   "GPAllocService" should "request an existing google project" in isolatedDbTest {
