@@ -6,9 +6,10 @@ import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
-import org.broadinstitute.dsde.workbench.model.UserInfo
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{CreateProject, RegisterGPAllocService}
+import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail}
 
+import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Random, Success}
 
@@ -25,8 +26,12 @@ class GPAllocService(protected val dbRef: DbReference,
                      protected val swaggerConfig: SwaggerConfig,
                      projectCreationSupervisor: ActorRef,
                      googleBillingDAO: GoogleDAO,
-                     projectCreationThreshold: Int)
+                     projectCreationThreshold: Int,
+                     abandonmentTime: Duration)
                     (implicit val executionContext: ExecutionContext) {
+
+  //on creation, tell the supervisor we exist
+  projectCreationSupervisor ! RegisterGPAllocService(this)
 
   def requestGoogleProject(userInfo: UserInfo): Future[AssignedProject] = {
     val newProject = dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
@@ -37,13 +42,13 @@ class GPAllocService(protected val dbRef: DbReference,
     newProject
   }
 
-  def releaseGoogleProject(userInfo: UserInfo, project: String): Future[Unit] = {
+  def releaseGoogleProject(userEmail: WorkbenchEmail, project: String): Future[Unit] = {
     val authCheck = dbRef.inTransaction { da =>
       da.billingProjectQuery.getAssignedBillingProject(project) map {
         case Some(bp) =>
           //assigned projects will have the owner field populated, but let's be cautious
-          if( bp.owner.getOrElse("") != userInfo.userEmail.value ) {
-            throw NotYourGoogleProject(project, userInfo.userEmail.value, bp.owner.getOrElse(""))
+          if( bp.owner.getOrElse("") != userEmail.value ) {
+            throw NotYourGoogleProject(project, userEmail.value, bp.owner.getOrElse(""))
           }
         //we say Not Found for a project that isn't in assigned yet
         case None => throw GoogleProjectNotFound(project)
@@ -63,6 +68,15 @@ class GPAllocService(protected val dbRef: DbReference,
       case _ => //never mind
     }
     authCheck
+  }
+
+  def releaseAbandonedProjects(): Future[Unit] = {
+    for {
+      abandonedProjects <- dbRef.inTransaction { da => da.billingProjectQuery.getAbandonedProjects(abandonmentTime) }
+      _ <- Future.traverse(abandonedProjects) { p => releaseGoogleProject(WorkbenchEmail(p.owner.get), p.billingProjectName) }
+    } yield {
+      //meh
+    }
   }
 
   //create new google project if we don't have any available

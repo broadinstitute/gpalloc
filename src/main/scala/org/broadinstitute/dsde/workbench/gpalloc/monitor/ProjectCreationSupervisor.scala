@@ -5,6 +5,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
+import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -13,26 +14,36 @@ object ProjectCreationSupervisor {
   sealed trait ProjectCreationSupervisorMessage
   case class CreateProject(projectName: String) extends ProjectCreationSupervisorMessage
   case object ResumeAllProjects extends ProjectCreationSupervisorMessage
+  case class RegisterGPAllocService(service: GPAllocService) extends ProjectCreationSupervisorMessage
+  case object SweepAbandonedProjects extends ProjectCreationSupervisorMessage
 
   def props(billingAccount: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
-            pollInterval: FiniteDuration = 1 minutes): Props = {
-    Props(new ProjectCreationSupervisor(billingAccount, dbRef, googleDAO, pollInterval))
+            pollInterval: FiniteDuration,
+            abandonmentSweepInterval: FiniteDuration): Props = {
+    Props(new ProjectCreationSupervisor(billingAccount, dbRef, googleDAO, pollInterval, abandonmentSweepInterval))
   }
 }
 
-class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, googleDAO: GoogleDAO, pollInterval: FiniteDuration)
+class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, googleDAO: GoogleDAO, pollInterval: FiniteDuration, abandonmentSweepInterval: FiniteDuration)
   extends Actor
   with LazyLogging {
 
   import context._
+
+  var gpAlloc: GPAllocService = _
 
   override def receive: PartialFunction[Any, Unit] = {
     case CreateProject(projectName) =>
       createProject(projectName)
     case ResumeAllProjects =>
       resumeAllProjects
+    case RegisterGPAllocService(service) =>
+      gpAlloc = service
+      self ! SweepAbandonedProjects
+    case SweepAbandonedProjects =>
+      sweepAssignedProjects()
   }
 
   //if a project creation monitor dies, give up on it
@@ -46,6 +57,11 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
       val newProjectMonitor = context.actorOf(ProjectCreationMonitor.props(bp.billingProjectName, billingAccount, dbRef, googleDAO, pollInterval), monitorName(bp.billingProjectName))
       newProjectMonitor ! ProjectCreationMonitor.WakeUp
     }}
+  }
+
+  def sweepAssignedProjects(): Unit = {
+    gpAlloc.releaseAbandonedProjects()
+    system.scheduler.scheduleOnce(abandonmentSweepInterval, self, SweepAbandonedProjects)
   }
 
   def createProject(projectName: String): Unit = {

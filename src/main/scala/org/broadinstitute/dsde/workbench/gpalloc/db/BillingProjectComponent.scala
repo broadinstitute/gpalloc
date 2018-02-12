@@ -1,21 +1,40 @@
 package org.broadinstitute.dsde.workbench.gpalloc.db
 
+import java.sql.Timestamp
+import java.time.Instant
+
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 
+import scala.concurrent.duration.Duration
+
 case class BillingProjectRecord(billingProjectName: String,
                                 owner: Option[String],
-                                status: BillingProjectStatus)
+                                status: BillingProjectStatus,
+                                lastAssignedTime: Option[Timestamp])
 
 object BillingProjectRecord {
+  val TIMESTAMP_SENTINEL = Instant.EPOCH.plusMillis(1000)
+
+  //MySQL doesn't like nullable timestamps so we represent the None value as Epoch aka Timestamp 0.
+  //These functions convert to and fro.
+  def tsToDB(ts: Option[Timestamp]): Timestamp =
+    ts.getOrElse(Timestamp.from(TIMESTAMP_SENTINEL))
+
+  def tsToDB(ts: Instant): Timestamp =
+    Timestamp.from(ts)
+
+  def tsFromDB(ts: Timestamp): Option[Timestamp] =
+    if( ts == Timestamp.from(TIMESTAMP_SENTINEL) ) None else Some(ts)
+
   //these give us magic conversions of enums to and from the db
-  def fromDB(dbRow: (String, Option[String], String)): BillingProjectRecord = {
-    val (billingProjectName, owner, status) = dbRow
-    BillingProjectRecord(billingProjectName, owner, BillingProjectStatus.withNameIgnoreCase(status))
+  def fromDB(dbRow: (String, Option[String], String, Timestamp)): BillingProjectRecord = {
+    val (billingProjectName, owner, status, lastAssignedTime) = dbRow
+    BillingProjectRecord(billingProjectName, owner, BillingProjectStatus.withNameIgnoreCase(status), tsFromDB(lastAssignedTime))
   }
 
-  def toDB(rec: BillingProjectRecord): Option[(String, Option[String], String)] = {
-    Some((rec.billingProjectName, rec.owner, rec.status.toString))
+  def toDB(rec: BillingProjectRecord): Option[(String, Option[String], String, Timestamp)] = {
+    Some((rec.billingProjectName, rec.owner, rec.status.toString, tsToDB(rec.lastAssignedTime)))
   }
 }
 
@@ -28,8 +47,9 @@ trait BillingProjectComponent extends GPAllocComponent {
     def billingProjectName =          column[String]            ("billingProjectName",    O.PrimaryKey, O.Length(254))
     def owner =                       column[Option[String]]    ("owner",                 O.Length(254))
     def status =                      column[String]            ("status",                O.Length(254))
+    def lastAssignedTime =            column[Timestamp]         ("lastAssignedTime",      O.SqlType("TIMESTAMP(6)"))
 
-    def * = (billingProjectName, owner, status) <> (BillingProjectRecord.fromDB, BillingProjectRecord.toDB)
+    def * = (billingProjectName, owner, status, lastAssignedTime) <> (BillingProjectRecord.fromDB, BillingProjectRecord.toDB)
   }
 
   object billingProjectQuery extends TableQuery(new BillingProjectTable(_)) {
@@ -51,7 +71,7 @@ trait BillingProjectComponent extends GPAllocComponent {
     }
 
     private[db] def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
-      (billingProjectQuery  += BillingProjectRecord(billingProject, None, status)) map { _ =>
+      (billingProjectQuery += BillingProjectRecord(billingProject, None, status, None)) map { _ =>
         billingProject
       }
     }
@@ -72,8 +92,8 @@ trait BillingProjectComponent extends GPAllocComponent {
         bps.headOption match {
           case Some(bp) =>
             findBillingProject(bp.billingProjectName)
-              .map(b => (b.owner, b.status))
-              .update(Some(owner), BillingProjectStatus.Assigned.toString) map { _ => Some(bp.billingProjectName) }
+              .map(b => (b.owner, b.status, b.lastAssignedTime))
+              .update(Some(owner), BillingProjectStatus.Assigned.toString, BillingProjectRecord.tsToDB(Instant.now())) map { _ => Some(bp.billingProjectName) }
           case None => DBIO.successful(None)
         }
       }
@@ -83,12 +103,19 @@ trait BillingProjectComponent extends GPAllocComponent {
       billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).length.result
     }
 
+    def getAbandonedProjects(abandonmentTime: Duration): DBIO[Seq[BillingProjectRecord]] = {
+      billingProjectQuery
+        .filter(_.status === BillingProjectStatus.Assigned.toString)
+        .filter(bp => bp.lastAssignedTime < Timestamp.from(Instant.now().minusMillis(abandonmentTime.toMillis)) )
+        .result
+    }
+
     //Does nothing if your project isn't in Assigned.
     def releaseProject(billingProject: String): DBIO[Int] = {
       findBillingProject(billingProject)
         .filter(_.status === BillingProjectStatus.Assigned.toString)
-        .map(bp => (bp.owner, bp.status))
-        .update(None, BillingProjectStatus.Unassigned.toString)
+        .map(bp => (bp.owner, bp.status, bp.lastAssignedTime))
+        .update(None, BillingProjectStatus.Unassigned.toString, BillingProjectRecord.tsToDB(None))
     }
 
   }

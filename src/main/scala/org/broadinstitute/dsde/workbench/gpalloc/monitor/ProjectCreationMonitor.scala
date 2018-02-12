@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
+import java.io.{PrintWriter, StringWriter}
+
 import akka.actor.Status.Failure
 import akka.actor.{Actor, Cancellable, Props}
 import akka.pattern._
@@ -69,7 +71,9 @@ class ProjectCreationMonitor(projectName: String,
 
     //stop because something (probably google polling) throw an exception
     case Failure(throwable) =>
-      logger.error(s"Creation of new project $projectName failed because of an exception: ${throwable.getMessage}")
+      val stackTrace = new StringWriter
+      throwable.printStackTrace(new PrintWriter(new StringWriter))
+      logger.error(s"Creation of new project $projectName failed because of an exception: ${throwable.getMessage} \n${stackTrace.toString}")
       stop(self)
   }
 
@@ -118,7 +122,7 @@ class ProjectCreationMonitor(projectName: String,
     val updatedOpsF = for {
       //get ops in progress
       activeOpMap <- dbRef.inTransaction { da => da.operationQuery.getActiveOperationsByType(projectName) }
-      activeCurrentStatusOps = activeOpMap(status)
+      activeCurrentStatusOps = activeOpMap.getOrElse(status, Seq())
       //ask google
       updatedOps <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => googleDAO.pollOperation(op) }
       //update the db with new op status

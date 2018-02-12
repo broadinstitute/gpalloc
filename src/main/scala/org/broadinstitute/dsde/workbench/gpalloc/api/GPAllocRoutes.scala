@@ -55,7 +55,7 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService, val swaggerConf
       path("googleproject" / Segment) { project =>
         delete {
           complete {
-            gpAllocService.releaseGoogleProject(userInfo, project).map { _ =>
+            gpAllocService.releaseGoogleProject(userInfo.userEmail, project).map { _ =>
               StatusCodes.Accepted
             }
           }
