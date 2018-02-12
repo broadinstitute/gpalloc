@@ -35,7 +35,7 @@ docker run --rm -v $PWD:/working -w /working \
     -e OUTPUT_DIR=/working/app \
     -e IMAGE=$BRANCH \
     -e ENV=$ENV \
-    broadinstitute/dsde-toolbox:dev configure.rb -y
+    broadinstitute/dsde-toolbox:dev ruby configure.rb -y
 
 scp -r $SSHOPTS app/* $SSH_USER@$SSH_HOST:/app
 
