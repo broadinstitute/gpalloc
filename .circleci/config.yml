@@ -59,4 +59,3 @@ workflows:
               only:
                 - master
                 - develop
-                - jr-save-jar
