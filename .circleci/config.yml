@@ -15,7 +15,7 @@ jobs:
       - run:
           name: Build jar
           command: BRANCH=$CIRCLE_BRANCH ./docker/build.sh jar
-      - persist_to_workspace
+      - persist_to_workspace:
           root: .
           paths:
             - *
