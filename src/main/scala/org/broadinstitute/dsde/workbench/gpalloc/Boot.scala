@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerC
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{ResumeAllProjects, SweepAbandonedProjects}
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.ResumeAllProjects
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 
 import scala.concurrent.duration._
@@ -24,7 +24,7 @@ object Boot extends App with LazyLogging {
     val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
     val gcsConfig = config.getConfig("gcs")
     val swaggerConfig = config.as[SwaggerConfig]("swagger")
-    val gpAllocConfig = config.as[GPAllocConfig]("gpAlloc")
+    val gpAllocConfig = config.as[GPAllocConfig]("gpalloc")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("gpalloc")
