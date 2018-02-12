@@ -87,7 +87,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     withSupervisor(mockGoogleDAO) { supervisor =>
       //this will call RegisterGPAllocService in the supervisor, kicking off a sweep
-      new GPAllocService(dbRef, supervisor, mockGoogleDAO, 100, 2 hours)
+      new GPAllocService(dbRef, swaggerConfig, supervisor, mockGoogleDAO, 100, 2 hours)
 
       eventually {
         dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }.get.status shouldBe Unassigned

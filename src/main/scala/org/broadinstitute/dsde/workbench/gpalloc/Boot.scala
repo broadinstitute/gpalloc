@@ -8,6 +8,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.gpalloc.api.{GPAllocRoutes, StandardUserInfoDirectives}
+import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor
@@ -23,14 +24,12 @@ object Boot extends App with LazyLogging {
     val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
     val gcsConfig = config.getConfig("gcs")
     val swaggerConfig = config.as[SwaggerConfig]("swagger")
+    val gpAllocConfig = config.as[GPAllocConfig]("gpAlloc")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("gpalloc")
     implicit val materializer = ActorMaterializer()
     import scala.concurrent.ExecutionContext.Implicits.global
-
-    val gcsConfig = config.getConfig("gcs")
-    val gpAllocConfig = config.as[GPAllocConfig]("gpAlloc")
 
     val dbRef = DbReference.init(config)
 
