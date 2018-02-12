@@ -30,7 +30,7 @@ jobs:
     steps:
       - checkout
       - attach_workspace:
-          at: ./gpalloc
+          at: .
       - run: cp ./gpalloc/gpalloc*.jar .
       - run:
           name: Docker login
