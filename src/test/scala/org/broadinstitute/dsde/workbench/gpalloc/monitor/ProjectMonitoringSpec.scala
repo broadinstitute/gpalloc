@@ -66,6 +66,10 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     }
   }
 
+  it should "sweep abandoned projects" in isolatedDbTest {
+    assert(false)
+  }
+
   "ProjectCreationMonitor" should "createNewProject" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
     val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, 10 millis)).underlyingActor
