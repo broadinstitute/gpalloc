@@ -27,7 +27,7 @@ jobs:
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
       - run:
           name: Build docker image
-          command: if [ $CIRCLE_BRANCH = "master" ]; then BRANCH=$CIRCLE_BRANCH ./doocker/build.sh -d push; fi
+          command: ./doocker/build.sh -d push
 
 # TODO: trigger jenkins deploy eventually, depending on branch
 #  deploy:
