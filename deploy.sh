@@ -26,7 +26,7 @@ COMPOSE_FILE=docker-compose.yml
 VAULT_TOKEN=$(cat /etc/vault-token-dsde)
 OUTPUT_DIR=app
 INPUT_DIR=configs
-BRANCH=${BRANCH:-latest}
+BRANCH=${BRANCH:-develop}
 
 docker run --rm -v $PWD:/working -w /working \
     -e APP_NAME=$PROJECT \

@@ -27,14 +27,14 @@ jobs:
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
       - run:
           name: Build docker image
-          command: ./doocker/build.sh -d push
+          command: ./docker/build.sh -d push
 
-# TODO: trigger jenkins deploy eventually, depending on branch
-#  deploy:
-#    machine: true
-#    working_directory: ~/repo
-#    steps:
-#      - curl
+# TODO: trigger jenkins deploy eventually for develop branch.  Need to put a JENKINS_TOKEN in circleci
+  deploy:
+    machine: true
+    working_directory: ~/repo
+    steps:
+      - curl https://fc-jenkins.dsp-techops.broadinstitute.org/view/Deploy/job/gpalloc-deploy/build?token=$JENKINS_TOKEN
 
 workflows:
   version: 2
