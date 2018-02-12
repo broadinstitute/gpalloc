@@ -2,7 +2,8 @@
 version: 2
 jobs:
   jar-build:
-    machine: true
+    machine:
+      docker_layer_caching: true
     working_directory: ~/repo
 
     environment:
@@ -22,15 +23,14 @@ jobs:
             - gpalloc/
 
   docker-build:
-    machine: true
+    machine:
+      docker_layer_caching: true 
     working_directory: ~/repo
 
     steps:
+      - checkout
       - attach_workspace:
           at: ./gpalloc
-      - run:
-          name: ls
-          command: ls
       - run:
           name: Docker login
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
