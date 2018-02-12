@@ -28,7 +28,6 @@ trait CommonTestData { this: ScalaFutures =>
   val dbRef = DbSingleton.ref
 
   val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
-  val gcsConfig = config.getConfig("gcs")
   val swaggerConfig = config.as[SwaggerConfig]("swagger")
 
   def freshBillingProjectRecord(projectName: String): BillingProjectRecord = {
