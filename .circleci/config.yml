@@ -31,7 +31,7 @@ jobs:
       - checkout
       - attach_workspace:
           at: ./gpalloc
-      - run: cp ./gpalloc/gcalloc*.jar .
+      - run: cp ./gpalloc/gpalloc*.jar .
       - run:
           name: Docker login
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
