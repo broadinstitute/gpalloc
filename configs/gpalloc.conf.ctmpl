@@ -1,5 +1,6 @@
 {{with $environment := ENV "ENV"}}
 {{with $billingPemSecrets := vault (printf "secret/dsde/firecloud/%s/common/billing-account.pem" $environment)}}
+{{with $refreshTokenServiceAccount := vault (printf "secret/dsde/firecloud/%s/common/refresh-token-service-account.json" $environment)}}
 gcs {
   pathToBillingPem = "/etc/billing-account.pem"
   billingPemEmail = "{{$billingPemSecrets.Data.client_email}}"
@@ -27,4 +28,9 @@ liquibase {
   changelog = "org/broadinstitute/dsde/workbench/gpalloc/liquibase/changelog.xml"
   initWithLiquibase = true
 }
-{{end}}{{end}}
+
+swagger {
+  googleClientId = "{{$refreshTokenServiceAccount.Data.web.client_id}}"
+  realm = "broad-dsde-{{$environment}}"
+}
+{{end}}{{end}}{{end}}

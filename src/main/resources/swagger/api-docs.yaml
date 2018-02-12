@@ -1,0 +1,165 @@
+swagger: '2.0'
+info:
+  title: GPAlloc
+  description: |
+    Google project allocation service
+  version: '0.1'
+basePath: /
+produces:
+  - application/json
+tags:
+  - name: test
+    description: Test API
+  - name: project
+    description: Projects API
+
+security:
+  - googleoauth:
+      - openid
+      - email
+      - profile
+
+securityDefinitions:
+  googleoauth:
+    type: oauth2
+    authorizationUrl: 'https://accounts.google.com/o/oauth2/auth'
+    flow: implicit
+    scopes:
+      openid: open id authorization
+      email: email authorization
+      profile: profile authorization
+
+##########################################################################################
+## PATHS
+##########################################################################################
+paths:
+
+  '/ping':
+    get:
+      summary: Ping
+      responses:
+        '200':
+          description: Pong
+        '500':
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: ping
+      tags:
+        - test
+      security: [] # no security
+
+  '/googleproject':
+    get:
+      summary: Request a clean Google project
+      responses:
+        '200':
+          description: Project allocated successfully, here are the details
+          schema:
+            $ref: '#/definitions/Project'
+        '500':
+          description: Project could not be allocated
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: requestGoogleProject
+      tags:
+        - project
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  '/googleproject/{projectName}':
+      get:
+        summary: Release a Google project
+        parameters:
+          - in: path
+            name: projectName
+            description: googleProject
+            required: true
+            type: string
+        responses:
+          '200':
+            description: Project released successfully
+          '500':
+            description: Project could not be released
+            schema:
+              $ref: '#/definitions/ErrorReport'
+        operationId: releaseGoogleProject
+        tags:
+          - project
+        security:
+          - googleoauth:
+            - openid
+            - email
+            - profile
+
+##########################################################################################
+## DEFINITIONS
+##########################################################################################
+definitions:
+  Project:
+    description: ''
+    required:
+      - projectName
+      - cromwellAuthBucketUrl
+    properties:
+      projectName:
+        type: string
+        description: Project ID
+      cromwellAuthBucketUrl:
+        type: string
+        description: Url for the bucket used by Cromwell
+
+  ErrorReport:
+    description: ''
+    required:
+      - source
+      - message
+      - causes
+      - stackTrace
+    properties:
+      source:
+        type: string
+        description: service causing error
+      message:
+        type: string
+        description: what went wrong
+      exceptionClass:
+        type: string
+        description: class of exception thrown
+      statusCode:
+        type: integer
+        description: HTTP status code
+      causes:
+        type: array
+        description: errors triggering this one
+        items:
+          $ref: '#/definitions/ErrorReport'
+      stackTrace:
+        type: array
+        description: stack trace
+        items:
+          $ref: '#/definitions/StackTraceElement'
+
+  StackTraceElement:
+    description: ''
+    required:
+      - className
+      - methodName
+      - fileName
+      - lineNumber
+    properties:
+      className:
+        type: string
+        description: class name
+      methodName:
+        type: string
+        description: method name
+      fileName:
+        type: string
+        description: source file name
+      lineNumber:
+        type: integer
+        description: line number
