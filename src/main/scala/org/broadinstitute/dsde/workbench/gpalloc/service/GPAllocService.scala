@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{CreateProject, RegisterGPAllocService}
 import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail}
 
 import scala.concurrent.duration.Duration
@@ -29,6 +29,9 @@ class GPAllocService(protected val dbRef: DbReference,
                      projectCreationThreshold: Int,
                      abandonmentTime: Duration)
                     (implicit val executionContext: ExecutionContext) {
+
+  //on creation, tell the supervisor we exist
+  projectCreationSupervisor ! RegisterGPAllocService(this)
 
   def requestGoogleProject(userInfo: UserInfo): Future[AssignedProject] = {
     val newProject = dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {

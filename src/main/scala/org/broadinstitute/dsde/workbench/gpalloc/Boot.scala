@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.api.{GPAllocRoutes, StandardUse
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.ResumeAllProjects
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{ResumeAllProjects, SweepAbandonedProjects}
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 
 import scala.concurrent.duration._
