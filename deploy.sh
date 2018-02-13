@@ -42,8 +42,7 @@ docker run --rm  -v $PWD:/working \
     -e USE_DOCKER=false \
     broadinstitute/dsde-toolbox:dev configure.rb -o configs/manifest.rb
 
-sudo scp -r $SSHOPTS app/* $SSH_USER@$HOST:/tmp/configs
-
+scp -r $SSHOPTS app/* $SSH_USER@$HOST:/tmp/configs
 $SSHCMD $SSH_USER@$HOST "sudo cp -r /tmp/configs /app"
 
 
