@@ -50,7 +50,7 @@ object Boot extends App with LazyLogging {
       "projectCreationSupervisor")
     projectCreationSupervisor ! ResumeAllProjects
 
-    val gpAllocService = new GPAllocService(dbRef, swaggerConfig, projectCreationSupervisor, googleBillingDAO, gpAllocConfig.minimumFreeProjects, gpAllocConfig.abandonmentTime)
+    val gpAllocService = new GPAllocService(dbRef, swaggerConfig, projectCreationSupervisor, googleBillingDAO, gpAllocConfig)
     val gpallocRoutes = new GPAllocRoutes(gpAllocService, swaggerConfig) with StandardUserInfoDirectives
 
       Http().bindAndHandle(gpallocRoutes.route, "0.0.0.0", 8080)
