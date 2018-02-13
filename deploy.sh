@@ -42,8 +42,8 @@ docker run --rm  -v $PWD:/working \
     -e USE_DOCKER=false \
     broadinstitute/dsde-toolbox:dev configure.rb -o configs/manifest.rb
 
-scp -r $SSHOPTS app/* $SSH_USER@$HOST:/tmp/configs
-$SSHCMD $SSH_USER@$HOST "sudo cp -r /tmp/configs /app"
+scp -r $SSHOPTS app/* $SSH_USER@$HOST:/tmp
+$SSHCMD $SSH_USER@$HOST "sudo cp -r /tmp /app"
 
 
 # Start new application container with the current version
