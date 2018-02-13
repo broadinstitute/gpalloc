@@ -33,6 +33,7 @@ object Settings {
   //sbt assembly settings
   val commonAssemblySettings = Seq(
     assemblyMergeStrategy in assembly := customMergeStrategy((assemblyMergeStrategy in assembly).value),
+    mainClass in assembly := Some("org.broadinstitute.dsde.workbench.gpalloc.Boot"),
     test in assembly := {}
   )
 
