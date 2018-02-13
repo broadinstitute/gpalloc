@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{CreateProject, RegisterGPAllocService}
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RequestNewProject, RegisterGPAllocService}
 import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail}
 
 import scala.concurrent.duration.Duration
@@ -26,19 +26,22 @@ class GPAllocService(protected val dbRef: DbReference,
                      protected val swaggerConfig: SwaggerConfig,
                      projectCreationSupervisor: ActorRef,
                      googleBillingDAO: GoogleDAO,
-                     projectCreationThreshold: Int,
+                     minimumFreeProjects: Int,
                      abandonmentTime: Duration)
                     (implicit val executionContext: ExecutionContext) {
 
   //on creation, tell the supervisor we exist
   projectCreationSupervisor ! RegisterGPAllocService(this)
 
+  //on startup, flesh out to the minimum number of projects
+  maybeCreateNewProjects()
+
   def requestGoogleProject(userInfo: UserInfo): Future[AssignedProject] = {
     val newProject = dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
       case Some(projectName) => googleBillingDAO.transferProjectOwnership(projectName, userInfo.userEmail.value)
       case None => throw NoGoogleProjectAvailable()
     }
-    newProject onComplete { _ => maybeCreateNewProject() }
+    newProject onComplete { _ => maybeCreateNewProjects() }
     newProject
   }
 
@@ -80,14 +83,17 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   //create new google project if we don't have any available
-  private def maybeCreateNewProject(): Unit = {
-    dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedProjects } map {
-      case count if count <= projectCreationThreshold => createNewGoogleProject()
+  private def maybeCreateNewProjects(): Unit = {
+    dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map {
+      case count if count < minimumFreeProjects =>
+        (1 to (minimumFreeProjects-count)) foreach { _ =>
+          createNewGoogleProject()
+        }
       case _ => //do nothing
     }
   }
 
   private def createNewGoogleProject(): Unit = {
-    projectCreationSupervisor ! CreateProject(s"gpalloc-${Random.alphanumeric.take(7).mkString.toLowerCase}")
+    projectCreationSupervisor ! RequestNewProject(s"gpalloc-${Random.alphanumeric.take(7).mkString.toLowerCase}")
   }
 }

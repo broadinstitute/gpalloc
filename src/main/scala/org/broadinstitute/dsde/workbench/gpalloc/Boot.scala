@@ -42,12 +42,15 @@ object Boot extends App with LazyLogging {
       gcsConfig.getString("billingEmail")) //billingEmail -- setServiceAccountUser
 
     val projectCreationSupervisor = system.actorOf(
-      ProjectCreationSupervisor.props(gcsConfig.getString("billingAccount"), dbRef, googleBillingDAO, gpAllocConfig.projectMonitorPollInterval, gpAllocConfig.abandonmentSweepInterval),
+      ProjectCreationSupervisor.props(
+        gcsConfig.getString("billingAccount"),
+        dbRef,
+        googleBillingDAO,
+        gpAllocConfig),
       "projectCreationSupervisor")
     projectCreationSupervisor ! ResumeAllProjects
 
-    //TODO: config this 5
-    val gpAllocService = new GPAllocService(dbRef, swaggerConfig, projectCreationSupervisor, googleBillingDAO, 5, gpAllocConfig.abandonmentTime)
+    val gpAllocService = new GPAllocService(dbRef, swaggerConfig, projectCreationSupervisor, googleBillingDAO, gpAllocConfig.minimumFreeProjects, gpAllocConfig.abandonmentTime)
     val gpallocRoutes = new GPAllocRoutes(gpAllocService, swaggerConfig) with StandardUserInfoDirectives
 
       Http().bindAndHandle(gpallocRoutes.route, "0.0.0.0", 8080)

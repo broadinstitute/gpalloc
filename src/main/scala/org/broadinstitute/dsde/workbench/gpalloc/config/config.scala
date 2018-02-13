@@ -21,7 +21,9 @@ package object config {
     GPAllocConfig(
       config.as[FiniteDuration]("projectMonitorPollInterval"),
       config.as[FiniteDuration]("abandonmentTime"),
-      config.as[FiniteDuration]("abandonmentSweepInterval")
+      config.as[FiniteDuration]("abandonmentSweepInterval"),
+      config.as[Int]("minimumFreeProjects"),
+      config.as[Int]("projectsPerSecondThrottle")
     )
   }
 }

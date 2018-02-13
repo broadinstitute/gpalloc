@@ -6,12 +6,13 @@ import java.time.Instant
 import akka.actor.{ActorRef, ActorSystem, PoisonPill, Terminated}
 import akka.testkit.{TestActorRef, TestKit, TestProbe}
 import org.broadinstitute.dsde.workbench.gpalloc.CommonTestData
+import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, MockGoogleDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, TestComponent}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationMonitor._
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.CreateProject
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 import org.scalatest.FlatSpecLike
 import org.scalatest.concurrent.Eventually._
@@ -20,31 +21,33 @@ import org.scalatest.time._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import java.time.{Duration => JDuration}
 
 class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
 
   import profile.api._
 
-  def withSupervisor[T](gDAO: GoogleDAO)(op: ActorRef => T): T = {
-    val supervisor = system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, 10 millis, 20 hours, this), "testProjectCreationSupervisor")
-    val result = op(supervisor)
-    supervisor ! PoisonPill
+  def withSupervisor[T](gDAO: GoogleDAO, gpAllocConfig: GPAllocConfig = gpAllocConfig)(op: TestActorRef[TestProjectCreationSupervisor] => T): T = {
+    val monitorRef = TestActorRef[TestProjectCreationSupervisor](TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, gpAllocConfig, this))
+
+    val result = op(monitorRef)
+    monitorRef ! PoisonPill
     result
   }
 
-  def findMonitorActor(projectName: String): Future[ActorRef] = {
-    system.actorSelection(s"/user/bpmon-$newProjectName").resolveOne(100 milliseconds)
+  def findMonitorActor(projectName: String, supervisor: ActorRef): Future[ActorRef] = {
+    system.actorSelection( supervisor.path / s"bpmon-$newProjectName").resolveOne(100 milliseconds)
   }
 
   "ProjectCreationSupervisor" should "create and monitor new projects" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
 
     withSupervisor(mockGoogleDAO) { supervisor =>
-      supervisor ! CreateProject(newProjectName)
+      supervisor ! RequestNewProject(newProjectName)
 
       //we're now racing against the project monitor actor, so everything from here on is eventually
       eventually {
-        findMonitorActor(newProjectName).futureValue
+        findMonitorActor(newProjectName, supervisor).futureValue
       }
 
       //did the monitor actor call the right things in google?
@@ -87,10 +90,27 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     withSupervisor(mockGoogleDAO) { supervisor =>
       //this will call RegisterGPAllocService in the supervisor, kicking off a sweep
-      new GPAllocService(dbRef, swaggerConfig, supervisor, mockGoogleDAO, 100, 2 hours)
+      new GPAllocService(dbRef, swaggerConfig, supervisor, mockGoogleDAO, 0, 2 hours)
 
       eventually {
         dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }.get.status shouldBe Unassigned
+      }
+    }
+  }
+
+  it should "throttle project creation" in isolatedDbTest {
+    val mockGoogleDAO = new MockGoogleDAO()
+    withSupervisor(mockGoogleDAO) { supervisor =>
+
+      //kick off two project creates. the throttle should kick in
+      supervisor ! RequestNewProject(newProjectName)
+      supervisor ! RequestNewProject(newProjectName2)
+
+      eventually(timeout = Timeout(Span(2, Seconds))) {
+        supervisor.underlyingActor.projectCreationTimes.length shouldBe 2
+        val second = supervisor.underlyingActor.projectCreationTimes(1)
+        val first = supervisor.underlyingActor.projectCreationTimes.head
+        JDuration.between(first, second).toMillis shouldBe > (1000L)
       }
     }
   }
@@ -209,7 +229,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
       val createdOp = freshOpRecord(newProjectName)
       dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
 
-      supervisor ! CreateProject(newProjectName)
+      supervisor ! RequestNewProject(newProjectName)
 
       expectMsgClass(1 second, classOf[Terminated])
     }
