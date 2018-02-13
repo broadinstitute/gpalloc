@@ -7,6 +7,7 @@ gpalloc:
     - "50000:50000"
   environment:
     MYSQL_HOST: mysql
+    JAVA_OPTS: -Dconfig.file=/etc/gpalloc.conf
   volumes:
     - /app/gpalloc.conf:/etc/gpalloc.conf
     - /app/billing-account.pem:/etc/billing-account.pem
@@ -34,7 +35,7 @@ proxy:
   environment:
     SERVER_ADMIN: dsptechops@broadinstitute.org
     # TODO: once we have multiple instances of gpalloc, create DNS entries for each
-    SERVER_NAME: gpalloc.dsp-techops.broadinstute.org
+    SERVER_NAME: {{if eq $image "master"}}gpalloc-{{$environment}}{{else}}gpalloc-beta{{end}}.dsp-techops.broadinstute.org
     PROXY_URL: http://gpalloc:8080/
     SSL_PROTOCOL: "-SSLv2 -SSLv3 -TLSv1 -TLSv1.1 +TLSv1.2"
   volumes:
