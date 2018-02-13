@@ -8,5 +8,6 @@ case class GPAllocConfig(
                           abandonmentTime: FiniteDuration,
                           abandonmentSweepInterval: FiniteDuration,
                           minimumFreeProjects: Int,
-                          projectsPerSecondThrottle: Int
+                          projectsPerSecondThrottle: Int,
+                          projectPrefix: String
                         )

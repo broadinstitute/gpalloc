@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.service
 
 import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.gpalloc.config.SwaggerConfig
+import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
@@ -26,8 +26,7 @@ class GPAllocService(protected val dbRef: DbReference,
                      protected val swaggerConfig: SwaggerConfig,
                      projectCreationSupervisor: ActorRef,
                      googleBillingDAO: GoogleDAO,
-                     minimumFreeProjects: Int,
-                     abandonmentTime: Duration)
+                     gpAllocConfig: GPAllocConfig)
                     (implicit val executionContext: ExecutionContext) {
 
   //on creation, tell the supervisor we exist
@@ -75,7 +74,7 @@ class GPAllocService(protected val dbRef: DbReference,
 
   def releaseAbandonedProjects(): Future[Unit] = {
     for {
-      abandonedProjects <- dbRef.inTransaction { da => da.billingProjectQuery.getAbandonedProjects(abandonmentTime) }
+      abandonedProjects <- dbRef.inTransaction { da => da.billingProjectQuery.getAbandonedProjects(gpAllocConfig.abandonmentTime) }
       _ <- Future.traverse(abandonedProjects) { p => releaseGoogleProject(WorkbenchEmail(p.owner.get), p.billingProjectName) }
     } yield {
       //meh
@@ -85,8 +84,8 @@ class GPAllocService(protected val dbRef: DbReference,
   //create new google project if we don't have any available
   private def maybeCreateNewProjects(): Unit = {
     dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map {
-      case count if count < minimumFreeProjects =>
-        (1 to (minimumFreeProjects-count)) foreach { _ =>
+      case count if count < gpAllocConfig.minimumFreeProjects =>
+        (1 to (gpAllocConfig.minimumFreeProjects-count)) foreach { _ =>
           createNewGoogleProject()
         }
       case _ => //do nothing
@@ -94,6 +93,6 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   private def createNewGoogleProject(): Unit = {
-    projectCreationSupervisor ! RequestNewProject(s"gpalloc-${Random.alphanumeric.take(7).mkString.toLowerCase}")
+    projectCreationSupervisor ! RequestNewProject(s"${gpAllocConfig.projectPrefix}-${Random.alphanumeric.take(7).mkString.toLowerCase}")
   }
 }

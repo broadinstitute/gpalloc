@@ -17,12 +17,13 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   import profile.api._
 
   //returns a service and a probe that watches the pretend supervisor actor
-  def gpAllocService(dbRef: DbReference, minimumFreeProjects: Int, abandonmentTime: Duration = 20 hours): (GPAllocService, TestProbe, MockGoogleDAO) = {
+  def gpAllocService(dbRef: DbReference, minimumFreeProjects: Int, abandonmentTime: FiniteDuration = 20 hours): (GPAllocService, TestProbe, MockGoogleDAO) = {
     val mockGoogleDAO = new MockGoogleDAO()
     val probe = TestProbe()
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
-    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, minimumFreeProjects, abandonmentTime)
+    val newConf = gpAllocConfig.copy(minimumFreeProjects=minimumFreeProjects, abandonmentTime=abandonmentTime)
+    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, newConf)
     probe.expectMsgClass(1 seconds, classOf[RegisterGPAllocService])
     (gpAlloc, probe, mockGoogleDAO)
   }
