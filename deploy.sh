@@ -24,7 +24,7 @@ fi
 
 
 PROJECT=gpalloc
-COMPOSE_FILE=docker-compose.yml
+COMPOSE_FILE=/app/docker-compose.yml
 VAULT_TOKEN=$(cat /etc/vault-token-dsde)
 OUTPUT_DIR=app
 INPUT_DIR=configs
@@ -42,8 +42,8 @@ docker run --rm  -v $PWD:/working \
     -e USE_DOCKER=false \
     broadinstitute/dsde-toolbox:dev configure.rb -o configs/manifest.rb
 
-scp -r $SSHOPTS app/* $SSH_USER@$HOST:/tmp
-$SSHCMD $SSH_USER@$HOST "sudo cp -r /tmp /app"
+scp -r $SSHOPTS app/ $SSH_USER@$HOST:/tmp
+$SSHCMD $SSH_USER@$HOST "sudo cp -r /tmp/app/* /app"
 
 
 # Start new application container with the current version
