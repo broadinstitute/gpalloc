@@ -11,7 +11,7 @@ gpalloc:
     - /app/gpalloc.conf:/etc/gpalloc.conf
     - /app/billing-account.pem:/etc/billing-account.pem
   links:
-    - msyql:mysql
+    - mysql:mysql
 
 mysql:
   image: mysql:5.7.15
