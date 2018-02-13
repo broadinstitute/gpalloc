@@ -6,5 +6,7 @@ import scala.concurrent.duration.FiniteDuration
 case class GPAllocConfig(
                           projectMonitorPollInterval: FiniteDuration,
                           abandonmentTime: FiniteDuration,
-                          abandonmentSweepInterval: FiniteDuration
+                          abandonmentSweepInterval: FiniteDuration,
+                          minimumFreeProjects: Int,
+                          projectsPerSecondThrottle: Int
                         )

@@ -103,6 +103,13 @@ trait BillingProjectComponent extends GPAllocComponent {
       billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).length.result
     }
 
+    //This weird function allows us to ask "do we need to kick off creating any more projects right now?"
+    def countUnassignedAndFutureProjects: DBIO[Int] = {
+      billingProjectQuery.filter(_.status inSetBind(
+        BillingProjectStatus.creatingStatuses.map(_.toString) ++ Seq(BillingProjectStatus.Unassigned.toString)) )
+        .length.result
+    }
+
     def getAbandonedProjects(abandonmentTime: Duration): DBIO[Seq[BillingProjectRecord]] = {
       billingProjectQuery
         .filter(_.status === BillingProjectStatus.Assigned.toString)
