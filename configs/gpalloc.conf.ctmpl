@@ -1,4 +1,4 @@
-{{with $environment := ENV "ENV"}}
+{{with $environment := env "ENVIRONMENT"}}
 {{with $billingPemSecrets := vault (printf "secret/dsde/firecloud/%s/common/billing-account.pem" $environment)}}
 {{with $refreshTokenServiceAccount := vault (printf "secret/dsde/firecloud/%s/common/refresh-token-service-account.json" $environment)}}
 gcs {

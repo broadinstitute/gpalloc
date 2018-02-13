@@ -1,4 +1,4 @@
-{{with $environment := env "ENV"}}
+{{with $environment := env "ENVIRONMENT"}}
 {{with $image := env "IMAGE"}}
 gpalloc:
   image: broadinstitute/gpalloc:{{$image}}

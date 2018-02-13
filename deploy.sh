@@ -17,8 +17,8 @@ if [ -z "${HOST}" ]; then
     exit 3
 fi
 
-if [ -z "${ENV}" ]; then
-    echo "FATAL ERROR: ENV undefined."
+if [ -z "${ENVIRONMENT}" ]; then
+    echo "FATAL ERROR: ENVIRONMENT undefined."
     exit 4
 fi
 
@@ -28,17 +28,19 @@ COMPOSE_FILE=docker-compose.yml
 VAULT_TOKEN=$(cat /etc/vault-token-dsde)
 OUTPUT_DIR=app
 INPUT_DIR=configs
-BRANCH=${IMAGE:-develop}
+IMAGE=${IMAGE:-develop}
+ENVIRONMENT=dev
 
-docker run --rm -v $PWD:/working -w /working \
+docker run --rm  -v $PWD:/working \
     -e APP_NAME=$PROJECT \
     -e VAULT_TOKEN=$VAULT_TOKEN \
-    -e INPUT_DIR=/working/configs \
+    -e INPUT_DIR=/working \
     -e OUTPUT_DIR=/working/app \
     -e IMAGE=$IMAGE \
-    -e ENV=$ENV \
+    -e ENVIRONMENT=$ENVIRONMENT \
     -e PROJECT=$PROJECT \
-    broadinstitute/dsde-toolbox:dev configure.rb -y
+    -e USE_DOCKER=false \
+    broadinstitute/dsde-toolbox:dev configure.rb -o configs/manifest.rb
 
 scp -r $SSHOPTS app/* $SSH_USER@$HOST:/app
 
