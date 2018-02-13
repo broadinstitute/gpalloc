@@ -21,20 +21,22 @@ import org.scalatest.time._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import java.time.{Duration => JDuration}
 
 class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
 
   import profile.api._
 
-  def withSupervisor[T](gDAO: GoogleDAO, gpAllocConfig: GPAllocConfig = gpAllocConfig)(op: ActorRef => T): T = {
-    val supervisor = system.actorOf(TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, gpAllocConfig, this), "testProjectCreationSupervisor")
-    val result = op(supervisor)
-    supervisor ! PoisonPill
+  def withSupervisor[T](gDAO: GoogleDAO, gpAllocConfig: GPAllocConfig = gpAllocConfig)(op: TestActorRef[TestProjectCreationSupervisor] => T): T = {
+    val monitorRef = TestActorRef[TestProjectCreationSupervisor](TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, gpAllocConfig, this))
+
+    val result = op(monitorRef)
+    monitorRef ! PoisonPill
     result
   }
 
-  def findMonitorActor(projectName: String): Future[ActorRef] = {
-    system.actorSelection(s"/user/bpmon-$newProjectName").resolveOne(100 milliseconds)
+  def findMonitorActor(projectName: String, supervisor: ActorRef): Future[ActorRef] = {
+    system.actorSelection( supervisor.path / s"bpmon-$newProjectName").resolveOne(100 milliseconds)
   }
 
   "ProjectCreationSupervisor" should "create and monitor new projects" in isolatedDbTest {
@@ -45,7 +47,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
       //we're now racing against the project monitor actor, so everything from here on is eventually
       eventually {
-        findMonitorActor(newProjectName).futureValue
+        findMonitorActor(newProjectName, supervisor).futureValue
       }
 
       //did the monitor actor call the right things in google?
@@ -100,18 +102,16 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     val mockGoogleDAO = new MockGoogleDAO()
     withSupervisor(mockGoogleDAO) { supervisor =>
 
-      //kick off a project create. this should prevent another create from happening for another second
+      //kick off two project creates. the throttle should kick in
       supervisor ! RequestNewProject(newProjectName)
-
-      //TODO: maybe subclass the supervisor and log the times at which createProject is called?
-      //yeah that seems good
-      assert(false, "this test doesn't make sense yet")
-
-      //FIXME: below doesn't work because testkit is watching the monitors, not the supervisor
-      expectMsgClass(2 seconds, classOf[CreateProject])
       supervisor ! RequestNewProject(newProjectName2)
-      expectNoMsg(500 millis)
-      expectMsgClass(1 second, classOf[CreateProject])
+
+      eventually(timeout = Timeout(Span(2, Seconds))) {
+        supervisor.underlyingActor.projectCreationTimes.length shouldBe 2
+        val second = supervisor.underlyingActor.projectCreationTimes(1)
+        val first = supervisor.underlyingActor.projectCreationTimes.head
+        JDuration.between(first, second).toMillis shouldBe > (1000L)
+      }
     }
   }
 

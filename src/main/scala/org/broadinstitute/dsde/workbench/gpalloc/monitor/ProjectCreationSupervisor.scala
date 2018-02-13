@@ -38,7 +38,8 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   import context._
 
   //yes this is deprecated. no i'm not going to move to akka streams
-  val throttler = system.actorOf(Props(classOf[TimerBasedThrottler], gpAllocConfig.projectsPerHourThrottle msgsPer 1.hour))
+  //this is for GCP ratelimit, which is one CreateProject per second
+  val throttler = system.actorOf(Props(classOf[TimerBasedThrottler], gpAllocConfig.projectsPerSecondThrottle msgsPer 1.second))
   throttler ! SetTarget(Some(self))
 
   var gpAlloc: GPAllocService = _
@@ -85,11 +86,12 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   }
 
   def createChildActor(projectName: String): ActorRef = {
-    system.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig.projectMonitorPollInterval), monitorName(projectName))
+    //use context.actorOf so we create children that will be killed if we get PoisonPilled
+    context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig.projectMonitorPollInterval), monitorName(projectName))
   }
 
   //TODO: hook this up. drop the database, optionally delete the projects
   def stopMonitoringEverything(): Unit = {
-    system.actorSelection(s"/user/${monitorNameBase}*") ! PoisonPill
+    system.actorSelection( self.path / s"$monitorNameBase*" ) ! PoisonPill
   }
 }
