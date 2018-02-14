@@ -27,7 +27,7 @@ mysql:
     - /app/mysqlstore:/var/lib/mysql
 
 proxy:
-  image: broadinstitute/apache-proxy:latest
+  image: broadinstitute/openidc-proxy:latest
   ports:
     - "80:80"
     - "443:443"
