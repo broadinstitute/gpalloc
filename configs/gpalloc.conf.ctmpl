@@ -17,13 +17,9 @@ gpalloc {
 mysql {
   profile = "slick.jdbc.MySQLProfile$"
   batchSize = 5000
-  host = "localhost"
-  host = ${?MYSQL_HOST}
-  port = 3306
-  port = ${?MYSQL_PORT}
   db {
     driver = "com.mysql.cj.jdbc.Driver"
-    url = "jdbc:mysql://"${mysql.host}":"${mysql.port}"/gpalloc?createDatabaseIfNotExist=true&useSSL=false&rewriteBatchedStatements=true&nullNamePatternMatchesAll=true"
+    url = "jdbc:mysql://mysql:3306/gpalloc?createDatabaseIfNotExist=true&useSSL=false&rewriteBatchedStatements=true&nullNamePatternMatchesAll=true"
     user = "gpalloc-test"
     password = "gpalloc-test"
     connectionTimeout = "5 seconds"  // default of 1 sec sometimes too short for docker local mysql

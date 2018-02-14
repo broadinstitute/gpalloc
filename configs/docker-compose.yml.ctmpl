@@ -20,8 +20,9 @@ mysql:
     - "3306"
   environment:
     - MYSQL_ROOT_PASSWORD=gpalloc-test
-    - MYSQL_USER=gpalloc=test
+    - MYSQL_USER=gpalloc-test
     - MYSQL_PASSWORD=gpalloc-test
+    - MYSQL_DATABASE=gpalloc
   volumes:
     - /app/mysqlstore:/var/lib/mysql
 
@@ -34,7 +35,6 @@ proxy:
     - gpalloc:gpalloc
   environment:
     SERVER_ADMIN: dsptechops@broadinstitute.org
-    # TODO: once we have multiple instances of gpalloc, create DNS entries for each
     SERVER_NAME: {{if eq $image "master"}}gpalloc-{{$environment}}{{else}}gpalloc-beta{{end}}.dsp-techops.broadinstute.org
     PROXY_URL: http://gpalloc:8080/
     SSL_PROTOCOL: "-SSLv2 -SSLv3 -TLSv1 -TLSv1.1 +TLSv1.2"
