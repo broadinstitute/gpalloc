@@ -42,27 +42,28 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService, val swaggerConf
 
   lazy val gpAllocRoutes: Route =
     requireUserInfo { userInfo =>
-
-      path("googleproject") {
-        get {
-          complete {
-            gpAllocService.requestGoogleProject(userInfo).map { newProject =>
-              StatusCodes.OK -> newProject
+      pathPrefix("api") {
+        path("googleproject") {
+          get {
+            complete {
+              gpAllocService.requestGoogleProject(userInfo).map { newProject =>
+                StatusCodes.OK -> newProject
+              }
             }
           }
-        }
-      } ~
-      path("googleproject" / Segment) { project =>
-        delete {
-          complete {
-            gpAllocService.releaseGoogleProject(userInfo.userEmail, project).map { _ =>
-              StatusCodes.Accepted
+        } ~
+        path("googleproject" / Segment) { project =>
+          delete {
+            complete {
+              gpAllocService.releaseGoogleProject(userInfo.userEmail, project).map { _ =>
+                StatusCodes.Accepted
+              }
             }
           }
         }
       }
-
     }
+
 
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
