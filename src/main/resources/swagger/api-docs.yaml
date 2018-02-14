@@ -71,7 +71,7 @@ paths:
           - profile
 
   '/api/googleproject/{projectName}':
-      get:
+      delete:
         summary: Release a Google project
         parameters:
           - in: path
