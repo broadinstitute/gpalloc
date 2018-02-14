@@ -1,6 +1,6 @@
 {{with $environment := env "ENVIRONMENT"}}
 {{with $image := env "IMAGE"}}
-gpalloc:
+app:
   image: broadinstitute/gpalloc:{{$image}}
   ports:
     - "8080:8080"
@@ -32,7 +32,7 @@ proxy:
     - "80:80"
     - "443:443"
   links:
-    - gpalloc:gpalloc
+    - app:app
   environment:
     SERVER_ADMIN: dsptechops@broadinstitute.org
     SERVER_NAME: {{if eq $image "master"}}gpalloc-{{$environment}}{{else}}gpalloc-beta{{end}}.dsp-techops.broadinstute.org
