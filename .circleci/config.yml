@@ -41,15 +41,18 @@ jobs:
 
   deploy:
     machine: true
-    working_directory: ~/repo
-
     environment:
       JENKINS_USER: jacmrob
       JENKINS_API_TOKEN: ${JACMROB_JENKINS_API_TOKEN}
-      GPALLOC_DEPLOY_TOKEN: gpalloc-deplooy-trigger
+      GPALLOC_DEPLOY_TOKEN: gpalloc-deploy-trigger
+
     steps:
-      - run: CRUMB=$(wget -q --auth-no-challenge --user $JENKINS_USER --password $JENKINS_API_TOKEN --output-document - 'https://fc-jenkins.dsp-techops.broadinstitute.org/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)')
-      - run: curl -X --POST https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/buildWithParameters?token=$GPALLOC_DEPLOY_TOKEN --user $JENKINS_USER:$JENKINS_API_TOKEN --data-urlencode json='{"parameter": [{"name":"IMAGE", "value":"$CIRCLE_BRANCH"}]}' -H '$CRUMB'
+      - run:
+          name: Get crumb
+          command: CRUMB=$(wget -q --auth-no-challenge --user $JENKINS_USER --password $JENKINS_API_TOKEN --output-document - 'https://fc-jenkins.dsp-techops.broadinstitute.org/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)')
+      - run:
+          name: Trigger jenkins job
+          command: curl -X --POST https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/buildWithParameters?token=$GPALLOC_DEPLOY_TOKEN --user $JENKINS_USER:$JENKINS_API_TOKEN --data-urlencode json='{"parameter": [{"name":"IMAGE", "value":"$CIRCLE_BRANCH"}]}' -H '$CRUMB'
 
 workflows:
   version: 2
