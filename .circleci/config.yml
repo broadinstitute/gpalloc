@@ -47,13 +47,11 @@ jobs:
       GPALLOC_DEPLOY_TOKEN: gpalloc-deploy-trigger
 
     steps:
+      - checkout
       - run:
-          name: Get crumb
-          command: wget -q --auth-no-challenge --user $JENKINS_USER --password $JENKINS_API_TOKEN --output-document crumb 'https://fc-jenkins.dsp-techops.broadinstitute.org/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)'
-      - run:
-          name: Trigger jenkins job
-          command: curl -X --POST https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/buildWithParameters?token=$GPALLOC_DEPLOY_TOKEN --user $JENKINS_USER:$JENKINS_API_TOKEN --data-urlencode json='{"parameter": [{"name":"IMAGE", "value":"$CIRCLE_BRANCH"}]}' -H '$(cat crumb)'
-
+          name: Trigger Jenkins Deploy
+          command: ./trigger-jenkins-deploy.sh
+          
 workflows:
   version: 2
   build:
