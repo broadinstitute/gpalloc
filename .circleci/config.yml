@@ -39,12 +39,17 @@ jobs:
           name: Build docker image
           command: ./docker/build.sh -d push
 
-# TODO: trigger jenkins deploy eventually for develop branch.  Need to put a JENKINS_TOKEN in circleci
   deploy:
     machine: true
     working_directory: ~/repo
+
+    environment:
+      JENKINS_USER: jacmrob
+      JENKINS_API_TOKEN: ${JACMROB_JENKINS_API_TOKEN}
+      GPALLOC_DEPLOY_TOKEN: gpalloc-deplooy-trigger
     steps:
-      - curl https://fc-jenkins.dsp-techops.broadinstitute.org/view/Deploy/job/gpalloc-deploy/build?token=$JENKINS_TOKEN
+      - run: CRUMB=$(wget -q --auth-no-challenge --user $JENKINS_USER --password $JENKINS_API_TOKEN --output-document - 'https://fc-jenkins.dsp-techops.broadinstitute.org/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)')
+      - run: curl -X --POST https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/buildWithParameters?token=$GPALLOC_DEPLOY_TOKEN --user $JENKINS_USER:$JENKINS_API_TOKEN --data-urlencode json='{"parameter": [{"name":"IMAGE", "value":"$CIRCLE_BRANCH"}]}' -H '$CRUMB'
 
 workflows:
   version: 2
@@ -54,6 +59,14 @@ workflows:
       - docker-build:
           requires:
             - jar-build
+          filters:
+            branches:
+              only:
+                - master
+                - develop
+      - deploy:
+          requires:
+            - docker-build
           filters:
             branches:
               only:
