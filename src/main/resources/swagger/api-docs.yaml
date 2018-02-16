@@ -103,6 +103,8 @@ paths:
       responses:
         '200':
           description: Everything's cool
+          schema:
+            $ref: '#/definitions/BillingProjectRecord'
         '500':
           description: Project could not be released
           schema:
@@ -184,3 +186,22 @@ definitions:
       lineNumber:
         type: integer
         description: line number
+
+  BillingProjectRecord:
+    description: 'One billing project'
+    required:
+      - billingProjectName
+      - status
+    properties:
+      billingProjectName:
+        type: string
+        description: name of billing project
+      owner:
+        type: string
+        description: email address
+      status:
+        type: string
+        description: status of billing project
+      lastAssignedTime:
+        type: integer
+        description: timestamp of last time this project was assigned to someone

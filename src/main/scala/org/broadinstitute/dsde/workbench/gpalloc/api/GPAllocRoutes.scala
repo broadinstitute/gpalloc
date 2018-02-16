@@ -61,7 +61,7 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService, val swaggerConf
             }
           }
         } ~
-        path("admin/dump") {
+        path("admin" / "dump") {
           get {
             complete {
               gpAllocService.dumpState().map { state =>
