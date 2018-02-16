@@ -2,9 +2,6 @@
 
 Makes creating billing projects snappy
 
-## Project Status 
-This project is under active development. It is not yet ready for deployment.
-
 ## Building and Running GPAlloc
 Clone and go into the repo:
 ```
@@ -24,3 +21,7 @@ Once you're done, tear down MySQL:
 ```
 ./docker/run-mysql.sh stop gpalloc
 ```
+
+## Using GPAlloc
+
+For instructions on how to use GPAlloc to provide you with Google projects, see [here](USAGE.md).
