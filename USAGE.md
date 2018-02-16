@@ -35,5 +35,6 @@ class SuperSuite extends Suites with GPAllocFixtures {
 }
 ```  
   
-  This test will run `FooSpec`, `BarSpec` and `BazSpec` in sequence; the mixed-in `GPAllocFixtures` will handle releasing all GPAlloc'd projects when it finishes.  
+  This test will run `FooSpec`, `BarSpec` and `BazSpec` in sequence; the mixed-in `GPAllocFixtures` will handle releasing all GPAlloc'd projects when it finishes.
+  
 2. Mark your individual test suites with the `@DoNotDiscover` annotation. This will prevent ScalaTest from running them twice: once as part of the super-Suite and then a second time when it discovers them again.
