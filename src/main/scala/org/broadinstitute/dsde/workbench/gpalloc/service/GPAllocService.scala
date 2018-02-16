@@ -4,9 +4,9 @@ import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
-import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
+import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference}
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RequestNewProject, RegisterGPAllocService}
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RegisterGPAllocService, RequestNewProject}
 import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail}
 
 import scala.concurrent.duration.Duration
@@ -70,6 +70,12 @@ class GPAllocService(protected val dbRef: DbReference,
       case _ => //never mind
     }
     authCheck
+  }
+
+  def dumpState(): Future[Seq[BillingProjectRecord]] = {
+    dbRef.inTransaction { da =>
+      da.billingProjectQuery.listEverything()
+    }
   }
 
   def releaseAbandonedProjects(): Future[Unit] = {

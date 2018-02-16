@@ -1,7 +1,11 @@
 package org.broadinstitute.dsde.workbench.gpalloc.model
 
+import java.sql.Timestamp
+
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import spray.json.DefaultJsonProtocol
+import org.broadinstitute.dsde.workbench.gpalloc.db.BillingProjectRecord
+import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
+import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsString, JsValue, JsonFormat}
 
 import scala.language.implicitConversions
 
@@ -26,5 +30,26 @@ object BillingProjectStatus extends Enumeration {
 case class AssignedProject(projectName: String, cromwellAuthBucketUrl: String)
 
 object GPAllocJsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+
+  implicit object BillingProjectStatusFormat extends JsonFormat[BillingProjectStatus] {
+    def write(obj: BillingProjectStatus) = JsString(obj.toString)
+
+    def read(json: JsValue): BillingProjectStatus = json match {
+      case JsString(status) => BillingProjectStatus.withName(status)
+      case other => throw DeserializationException("Expected BillingProjectStatus, got: " + other)
+    }
+  }
+
+  implicit object TimestampFormat extends JsonFormat[Timestamp] {
+    def write(obj: Timestamp) = JsNumber(obj.getTime)
+
+    def read(json: JsValue) = json match {
+      case JsNumber(time) => new Timestamp(time.toLong)
+
+      case _ => throw new DeserializationException("Date expected")
+    }
+  }
+
   implicit val assignedProjectFormat = jsonFormat2(AssignedProject.apply)
+  implicit val billingProjectRecordFormat = jsonFormat4(BillingProjectRecord.apply)
 }
