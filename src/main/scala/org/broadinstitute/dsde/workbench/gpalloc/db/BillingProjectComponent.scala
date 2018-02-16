@@ -125,5 +125,9 @@ trait BillingProjectComponent extends GPAllocComponent {
         .update(None, BillingProjectStatus.Unassigned.toString, BillingProjectRecord.tsToDB(None))
     }
 
+    def listEverything(): DBIO[Seq[BillingProjectRecord]] = {
+      billingProjectQuery.result
+    }
+
   }
 }
