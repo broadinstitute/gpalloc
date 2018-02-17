@@ -28,10 +28,11 @@ If you have _multiple_ tests that mix in `GPAllocFixtures`, the need to release 
 1. Make a new super-Suite with all of your suites nested inside it, like so:  
   
   ```
-class SuperSuite extends Suites with GPAllocSuperFixture {
+class SamSuperSuite extends Suites(
   new FooSpec,
   new BarSpec,
-  new BazSpec
+  new BazSpec) with GPAllocSuperFixture {
+
 }
 ```  
   
