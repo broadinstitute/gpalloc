@@ -38,3 +38,5 @@ class SuperSuite extends Suites with GPAllocSuperFixture {
   This test will run `FooSpec`, `BarSpec` and `BazSpec` in sequence; the mixed-in `GPAllocSuperFixture` will handle releasing all GPAlloc'd projects from its suites when it finishes.
   
 2. Mark your individual test suites with the `@DoNotDiscover` annotation. This will prevent ScalaTest from running them twice: once as part of the super-Suite and then a second time when it discovers them again.
+
+This will allow you to run a single test by right-clicking on it in IntelliJ, and do the simple `sbt test` from the commandline to run everything.
