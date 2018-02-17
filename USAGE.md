@@ -28,13 +28,13 @@ If you have _multiple_ tests that mix in `GPAllocFixtures`, the need to release 
 1. Make a new super-Suite with all of your suites nested inside it, like so:  
   
   ```
-class SuperSuite extends Suites with GPAllocFixtures {
+class SuperSuite extends Suites with GPAllocSuperFixture {
   new FooSpec,
   new BarSpec,
   new BazSpec
 }
 ```  
   
-  This test will run `FooSpec`, `BarSpec` and `BazSpec` in sequence; the mixed-in `GPAllocFixtures` will handle releasing all GPAlloc'd projects when it finishes.
+  This test will run `FooSpec`, `BarSpec` and `BazSpec` in sequence; the mixed-in `GPAllocSuperFixture` will handle releasing all GPAlloc'd projects from its suites when it finishes.
   
 2. Mark your individual test suites with the `@DoNotDiscover` annotation. This will prevent ScalaTest from running them twice: once as part of the super-Suite and then a second time when it discovers them again.
