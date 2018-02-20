@@ -12,6 +12,8 @@ tags:
     description: Test API
   - name: project
     description: Projects API
+  - name: admin
+    description: Admin API
 
 security:
   - googleoauth:
@@ -71,29 +73,50 @@ paths:
           - profile
 
   '/api/googleproject/{projectName}':
-      delete:
-        summary: Release a Google project
-        parameters:
-          - in: path
-            name: projectName
-            description: googleProject
-            required: true
-            type: string
-        responses:
-          '200':
-            description: Project released successfully
-          '500':
-            description: Project could not be released
-            schema:
-              $ref: '#/definitions/ErrorReport'
-        operationId: releaseGoogleProject
-        tags:
-          - project
-        security:
-          - googleoauth:
-            - openid
-            - email
-            - profile
+    delete:
+      summary: Release a Google project
+      parameters:
+        - in: path
+          name: projectName
+          description: googleProject
+          required: true
+          type: string
+      responses:
+        '200':
+          description: Project released successfully
+        '500':
+          description: Project could not be released
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: releaseGoogleProject
+      tags:
+        - project
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  '/api/admin/dump':
+    get:
+      summary: Dump the entire listing of BillingProjectRecords.
+      responses:
+        '200':
+          description: Everything's cool
+          schema:
+            $ref: '#/definitions/BillingProjectRecord'
+        '500':
+          description: Project could not be released
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: adminDumpEverything
+      tags:
+        - admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
 
 ##########################################################################################
 ## DEFINITIONS
@@ -163,3 +186,22 @@ definitions:
       lineNumber:
         type: integer
         description: line number
+
+  BillingProjectRecord:
+    description: 'One billing project'
+    required:
+      - billingProjectName
+      - status
+    properties:
+      billingProjectName:
+        type: string
+        description: name of billing project
+      owner:
+        type: string
+        description: email address
+      status:
+        type: string
+        description: status of billing project
+      lastAssignedTime:
+        type: integer
+        description: timestamp of last time this project was assigned to someone
