@@ -124,8 +124,6 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     } yield {
       //nah
     }
-
-    //TODO: remove some google groups https://github.com/broadinstitute/gpalloc/issues/18
   }
 
   //poll google for what's going on
