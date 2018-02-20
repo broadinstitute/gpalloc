@@ -117,7 +117,6 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     val cleanupPolicyF = cleanupPolicyBindings(projectName)
     val cleanupSAKeysF = cleanupPetSAKeys(projectName)
 
-
     for {
       _ <- cleanupPolicyF.debug("cleanupPolicies")
       _ <- cleanupSAKeysF.debug("cleanupKeys")
