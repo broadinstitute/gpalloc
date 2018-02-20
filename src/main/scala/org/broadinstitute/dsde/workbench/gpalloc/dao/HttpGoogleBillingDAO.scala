@@ -114,30 +114,19 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
 
   override def scrubBillingProject(projectName: String): Future[Unit] = {
     //start these early so they're async
-    /*
-    val cleanupPolicyF = retryWhen500orGoogleError(() => {
-      logger.info("cleanupPolicyF")
-      val policyRequest = new SetIamPolicyRequest().setPolicy(new Policy().setBindings(null))
-      googleRq(cloudResources.projects().setIamPolicy(projectName, policyRequest))
-    })
+    val cleanupPolicyF = cleanupPolicyBindings(projectName)
     val cleanupSAKeysF = cleanupPetSAKeys(projectName)
-    */
 
-    val b = new Binding().setRole("roles/owner").setMembers(List("user:billing@test.firecloud.org").asJava)
 
     for {
-      _ <- cleanupPolicyBindings(projectName).debug("cleanupPolicies")
-      _ <- cleanupPetSAKeys(projectName).debug("cleanupKeys")
+      _ <- cleanupPolicyF.debug("cleanupPolicies")
+      _ <- cleanupSAKeysF.debug("cleanupKeys")
       _ <- cleanupCromwellAuthBucket(projectName).debug("cromwellAuthBucky")
     } yield {
       //nah
     }
 
     //TODO: remove some google groups https://github.com/broadinstitute/gpalloc/issues/18
-  }
-
-  def blah(projectName: String):Future[Unit] = {
-    googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) ).debug("aa").map{ _ => ()}
   }
 
   //poll google for what's going on
@@ -294,7 +283,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
         val existingPolicies: Map[String, Seq[String]] = existingPolicy.getBindings.asScala.map { policy => policy.getRole -> policy.getMembers.asScala }.toMap
 
         val updatedPolicies = existingPolicies.map { case (role, members) =>
-          (role, members.filterNot(_.startsWith("policy-")))
+          (role, members.filterNot(_.startsWith("group:policy-")))
         }.collect {
           case (role, members) if members.nonEmpty =>
             new Binding().setRole(role).setMembers(members.distinct.asJava)
