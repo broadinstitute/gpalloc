@@ -83,12 +83,16 @@ class ProjectCreationMonitor(projectName: String,
 
   def resumeInflightProject: Future[ProjectCreationMonitorMessage] = {
     dbRef.inTransaction { da => da.billingProjectQuery.getBillingProject(projectName) } map {
-      case Some(bp) => PollForStatus(bp.status)
-      case None => throw new WorkbenchException(s"ProjectCreationMonitor asked to find missing project $projectName")
+      case Some(bp) =>
+        logger.info(s"ProjectCreationMonitor.resumeInflightProject $projectName ${bp.status}")
+        PollForStatus(bp.status)
+      case None =>
+        throw new WorkbenchException(s"ProjectCreationMonitor asked to find missing project $projectName")
     }
   }
 
   def createNewProject: Future[ProjectCreationMonitorMessage] = {
+    logger.info(s"ProjectCreationMonitor.createNewProject $projectName")
     for {
       newOperationRec <- googleDAO.createProject(projectName, billingAccount)
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNewProject(projectName, newOperationRec) }
@@ -98,6 +102,7 @@ class ProjectCreationMonitor(projectName: String,
   }
 
   def enableServices: Future[ProjectCreationMonitorMessage] = {
+    logger.info(s"ProjectCreationMonitor.enableServices $projectName")
     for {
       serviceOps <- googleDAO.enableCloudServices(projectName, billingAccount)
       _ <- dbRef.inTransaction { da => DBIO.seq(
@@ -109,6 +114,7 @@ class ProjectCreationMonitor(projectName: String,
   }
 
   def completeSetup: Future[ProjectCreationMonitorMessage] = {
+    logger.info(s"ProjectCreationMonitor.completeSetup $projectName")
     for {
       _ <- googleDAO.setupProjectBucketAccess(projectName)
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.updateStatus(projectName, Unassigned) }
@@ -119,6 +125,7 @@ class ProjectCreationMonitor(projectName: String,
 
   //checks Google for status of active operations and figures out what next
   def pollForStatus(status: BillingProjectStatus): Future[ProjectCreationMonitorMessage] = {
+    logger.info(s"ProjectCreationMonitor.pollForStatus $projectName $status")
     val updatedOpsF = for {
       //get ops in progress
       activeOpMap <- dbRef.inTransaction { da => da.operationQuery.getActiveOperationsByType(projectName) }
