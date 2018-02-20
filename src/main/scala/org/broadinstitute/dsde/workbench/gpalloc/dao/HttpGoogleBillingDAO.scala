@@ -118,9 +118,9 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     val cleanupSAKeysF = cleanupPetSAKeys(projectName)
 
     for {
-      _ <- cleanupPolicyF.debug("cleanupPolicies")
-      _ <- cleanupSAKeysF.debug("cleanupKeys")
-      _ <- cleanupCromwellAuthBucket(projectName).debug("cromwellAuthBucky")
+      _ <- cleanupPolicyF
+      _ <- cleanupSAKeysF
+      _ <- cleanupCromwellAuthBucket(projectName)
     } yield {
       //nah
     }
@@ -315,7 +315,6 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
   def gKeyPath(project: String, serviceAccountEmail: String, keyEmail: String) = gSAPath(project, serviceAccountEmail) + s"/keys/$keyEmail"
 
   def cleanupPetSAKeys(projectName: String): Future[Unit] = {
-    logger.info("cleanupPetSAKeys")
     for {
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
       pets = serviceAccounts.getAccounts.asScala.filter(_.getEmail.startsWith("pet-"))
