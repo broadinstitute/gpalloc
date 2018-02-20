@@ -12,7 +12,7 @@ import com.google.api.services.admin.directory.DirectoryScopes
 import com.google.api.services.cloudbilling.Cloudbilling
 import com.google.api.services.cloudbilling.model.ProjectBillingInfo
 import com.google.api.services.cloudresourcemanager.CloudResourceManager
-import com.google.api.services.cloudresourcemanager.model.{Policy, Project, SetIamPolicyRequest}
+import com.google.api.services.cloudresourcemanager.model.{Binding, Policy, Project, SetIamPolicyRequest}
 import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.genomics.GenomicsScopes
@@ -114,21 +114,30 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
 
   override def scrubBillingProject(projectName: String): Future[Unit] = {
     //start these early so they're async
+    /*
     val cleanupPolicyF = retryWhen500orGoogleError(() => {
+      logger.info("cleanupPolicyF")
       val policyRequest = new SetIamPolicyRequest().setPolicy(new Policy().setBindings(null))
       googleRq(cloudResources.projects().setIamPolicy(projectName, policyRequest))
     })
     val cleanupSAKeysF = cleanupPetSAKeys(projectName)
+    */
+
+    val b = new Binding().setRole("roles/owner").setMembers(List("user:billing@test.firecloud.org").asJava)
 
     for {
-      _ <- cleanupPolicyF
-      _ <- cleanupSAKeysF
-      _ <- cleanupCromwellAuthBucket(projectName)
+      _ <- cleanupPolicyBindings(projectName).debug("cleanupPolicies")
+      _ <- cleanupPetSAKeys(projectName).debug("cleanupKeys")
+      _ <- cleanupCromwellAuthBucket(projectName).debug("cromwellAuthBucky")
     } yield {
       //nah
     }
 
     //TODO: remove some google groups https://github.com/broadinstitute/gpalloc/issues/18
+  }
+
+  def blah(projectName: String):Future[Unit] = {
+    googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) ).debug("aa").map{ _ => ()}
   }
 
   //poll google for what's going on
@@ -275,8 +284,31 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     !(entityName.startsWith("project-owners-") || entityName.startsWith("project-editors-"))
   }
 
+  def cleanupPolicyBindings(projectName: String): Future[Unit] = {
+    for {
+      existingPolicy <- retryWhen500orGoogleError(() => {
+        executeGoogleRequest(cloudResources.projects().getIamPolicy(projectName, null))
+      })
+
+      _ <- retryWhen500orGoogleError(() => {
+        val existingPolicies: Map[String, Seq[String]] = existingPolicy.getBindings.asScala.map { policy => policy.getRole -> policy.getMembers.asScala }.toMap
+
+        val updatedPolicies = existingPolicies.map { case (role, members) =>
+          (role, members.filterNot(_.startsWith("policy-")))
+        }.collect {
+          case (role, members) if members.nonEmpty =>
+            new Binding().setRole(role).setMembers(members.distinct.asJava)
+        }.toList
+
+        // when setting IAM policies, always reuse the existing policy so the etag is preserved.
+        val policyRequest = new SetIamPolicyRequest().setPolicy(existingPolicy.setBindings(updatedPolicies.asJava))
+        executeGoogleRequest(cloudResources.projects().setIamPolicy(projectName, policyRequest))
+      })
+    } yield ()
+  }
+
   //removes all acls added to the cromwell auth bucket that aren't the project owner/editor ones
-  def cleanupCromwellAuthBucket(billingProjectName: String) = {
+  def cleanupCromwellAuthBucket(billingProjectName: String): Future[Unit] = {
     val bucketName = cromwellAuthBucketName(billingProjectName)
     for {
       oAcls <- googleRq( storage.defaultObjectAccessControls.list(bucketName) )
@@ -297,6 +329,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
   def gKeyPath(project: String, serviceAccountEmail: String, keyEmail: String) = gSAPath(project, serviceAccountEmail) + s"/keys/$keyEmail"
 
   def cleanupPetSAKeys(projectName: String): Future[Unit] = {
+    logger.info("cleanupPetSAKeys")
     for {
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
       pets = serviceAccounts.getAccounts.asScala.filter(_.getEmail.startsWith("pet-"))
