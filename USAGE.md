@@ -19,29 +19,6 @@ The situation in FiaB-style auto-testing land is a little different in that work
 
 ## GPAlloc in FiaB auto-tests
 
-Rawls + Sam have no way to forget that a billing project ever existed. Since releasing a claim on a billing project means you may get that billing project back in a later request to GPAlloc, we have to hold on to _all_ claimed billing projects until any given auto-test run is complete. (Otherwise you could potentially get a billing project you've already seen, and Rawls + Sam would barf saying "I already know about this project".)
+`workbenchServiceTest` now has support for GPAlloc. Mixing in `BillingFixtures` provides the loan-pattern method `withCleanBillingProject`. This supplies a GPAlloc'd project and handles the cleanup at the end for you. (If no GPAlloc'd projects are available, it falls back to creating a new one.)
 
-`workbenchServiceTest` now has support for GPAlloc. Mixing in `GPAllocFixtures` provides the loan-pattern method `withCleanBillingProject`. This supplies a GPAlloc'd project and handles the cleanup at the end for you. (If no GPAlloc'd projects are available, it falls back to creating a new one.)
-
-If you have a _single_ test that mixes in `GPAllocFixtures`, this will Just Work™.
-
-If you have _multiple_ tests that mix in `GPAllocFixtures`, the need to release projects only once _all_ tests are finished complicates things a tiny bit. The good news is that if you do it wrong, the fixtures will notice and fail loudly.
-
-Here's how to set up your tests so they all work:
-
-1. Make a new super-Suite with all of your suites nested inside it, like so:  
-  
-  ```
-class MySuperSuite extends Suites(
-  new FooSpec,
-  new BarSpec,
-  new BazSpec) with GPAllocSuperFixture {
-
-}
-```  
-  
-  This test will run `FooSpec`, `BarSpec` and `BazSpec` in sequence; the mixed-in `GPAllocSuperFixture` will handle releasing all GPAlloc'd projects from its suites when it finishes.
-  
-2. Mark your individual test suites with the `@DoNotDiscover` annotation. This will prevent ScalaTest from running them twice: once as part of the super-Suite and then a second time when it discovers them again.
-
-You can still run the `@DoNotDiscover`ed tests by right-clicking on them in Intellij, or asking for them explicitly with `testOnly`. Running `sbt test` from the commandline will run everything as you'd expect.
+Previous iterations of this document said a lot of confusing things about super-Suites and such. This is no longer the case: `withCleanBillingProject` can now properly clean up after itself (thanks Matt B!).
