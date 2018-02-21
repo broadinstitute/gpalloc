@@ -36,7 +36,9 @@ object TestGoogle extends App {
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail")) //billingEmail -- setServiceAccountUser
 
-    val projectName = "gpalloc-test-project"
+    val projectName = "gpalloc-dev-develop-sywr9jt"
+
+    testScrubProject(gDAO, projectName)
 
     //testEnableCloudServices(gDAO, projectName, gcsConfig.getString("billingAccount"))
     //testPollOp(gDAO, projectName, ActiveOperationRecord("gpalloc-test-project",BillingProjectStatus.EnablingServices,"operations/tmo-acf.c8c99528-2900-46cb-a676-07da63ac5da1",false,None))
@@ -69,6 +71,13 @@ object TestGoogle extends App {
   def testBucketAccess(gDAO: HttpGoogleBillingDAO, projectName: String)(implicit ec: ExecutionContext): Unit = {
     gDAO.setupProjectBucketAccess(projectName).onComplete {
       case Success(recs) => println(recs)
+      case Failure(e) => println(e.toString)
+    }
+  }
+
+  def testScrubProject(gDAO: HttpGoogleBillingDAO, projectName: String)(implicit ec: ExecutionContext): Unit = {
+    gDAO.scrubBillingProject(projectName).onComplete {
+      case Success(_) => println(s"succeeded scrubbing $projectName")
       case Failure(e) => println(e.toString)
     }
   }

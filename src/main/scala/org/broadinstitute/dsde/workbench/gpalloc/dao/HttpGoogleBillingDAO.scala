@@ -12,7 +12,7 @@ import com.google.api.services.admin.directory.DirectoryScopes
 import com.google.api.services.cloudbilling.Cloudbilling
 import com.google.api.services.cloudbilling.model.ProjectBillingInfo
 import com.google.api.services.cloudresourcemanager.CloudResourceManager
-import com.google.api.services.cloudresourcemanager.model.{Policy, Project, SetIamPolicyRequest}
+import com.google.api.services.cloudresourcemanager.model.{Binding, Project, SetIamPolicyRequest, Operation => CRMOperation}
 import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.genomics.GenomicsScopes
@@ -20,7 +20,7 @@ import com.google.api.services.iam.v1.Iam
 import com.google.api.services.iam.v1.model.{ServiceAccount, ServiceAccountKey}
 import com.google.api.services.plus.PlusScopes
 import com.google.api.services.servicemanagement.ServiceManagement
-import com.google.api.services.servicemanagement.model.EnableServiceRequest
+import com.google.api.services.servicemanagement.model.{EnableServiceRequest, Operation => SMOperation}
 import com.google.api.services.storage.model.Bucket.Lifecycle
 import com.google.api.services.storage.model.Bucket.Lifecycle.Rule.{Action, Condition}
 import com.google.api.services.storage.model.{Bucket, BucketAccessControl, ObjectAccessControl}
@@ -114,10 +114,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
 
   override def scrubBillingProject(projectName: String): Future[Unit] = {
     //start these early so they're async
-    val cleanupPolicyF = retryWhen500orGoogleError(() => {
-      val policyRequest = new SetIamPolicyRequest().setPolicy(new Policy().setBindings(null))
-      googleRq(cloudResources.projects().setIamPolicy(projectName, policyRequest))
-    })
+    val cleanupPolicyF = cleanupPolicyBindings(projectName)
     val cleanupSAKeysF = cleanupPetSAKeys(projectName)
 
     for {
@@ -127,8 +124,6 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     } yield {
       //nah
     }
-
-    //TODO: remove some google groups https://github.com/broadinstitute/gpalloc/issues/18
   }
 
   //poll google for what's going on
@@ -139,16 +134,26 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     // there is not much else to be done... too bad scala does not have duck typing.
     operation.operationType match {
       case CreatingProject =>
-        retryWhen500orGoogleError(() => {
+        retryWithRecoverWhen500orGoogleError(() => {
           executeGoogleRequest(cloudResources.operations().get(operation.operationId))
-        }).map { op =>
+        }){
+          case t: HttpResponseException if t.getStatusCode == 429 =>
+            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
+            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
+            new CRMOperation().setDone(false).setError(null)
+        }.map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
 
       case EnablingServices =>
-        retryWhen500orGoogleError(() => {
+        retryWithRecoverWhen500orGoogleError(() => {
           executeGoogleRequest(servicesManager.operations().get(operation.operationId))
-        }).map { op =>
+        }){
+          case t: HttpResponseException if t.getStatusCode == 429 =>
+            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
+            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
+            new SMOperation().setDone(false).setError(null)
+        }.map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
     }
@@ -275,8 +280,31 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     !(entityName.startsWith("project-owners-") || entityName.startsWith("project-editors-"))
   }
 
+  def cleanupPolicyBindings(projectName: String): Future[Unit] = {
+    for {
+      existingPolicy <- retryWhen500orGoogleError(() => {
+        executeGoogleRequest(cloudResources.projects().getIamPolicy(projectName, null))
+      })
+
+      _ <- retryWhen500orGoogleError(() => {
+        val existingPolicies: Map[String, Seq[String]] = existingPolicy.getBindings.asScala.map { policy => policy.getRole -> policy.getMembers.asScala }.toMap
+
+        val updatedPolicies = existingPolicies.map { case (role, members) =>
+          (role, members.filterNot(_.startsWith("group:policy-")))
+        }.collect {
+          case (role, members) if members.nonEmpty =>
+            new Binding().setRole(role).setMembers(members.distinct.asJava)
+        }.toList
+
+        // when setting IAM policies, always reuse the existing policy so the etag is preserved.
+        val policyRequest = new SetIamPolicyRequest().setPolicy(existingPolicy.setBindings(updatedPolicies.asJava))
+        executeGoogleRequest(cloudResources.projects().setIamPolicy(projectName, policyRequest))
+      })
+    } yield ()
+  }
+
   //removes all acls added to the cromwell auth bucket that aren't the project owner/editor ones
-  def cleanupCromwellAuthBucket(billingProjectName: String) = {
+  def cleanupCromwellAuthBucket(billingProjectName: String): Future[Unit] = {
     val bucketName = cromwellAuthBucketName(billingProjectName)
     for {
       oAcls <- googleRq( storage.defaultObjectAccessControls.list(bucketName) )

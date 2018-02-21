@@ -16,6 +16,7 @@ import slick.dbio.DBIO
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Random
 
 object ProjectCreationMonitor {
   sealed trait ProjectCreationMonitorMessage
@@ -24,7 +25,7 @@ object ProjectCreationMonitor {
   case object EnableServices extends ProjectCreationMonitorMessage
   case object CompleteSetup extends ProjectCreationMonitorMessage
   case class PollForStatus(status: BillingProjectStatus) extends ProjectCreationMonitorMessage
-  case class ScheduleNextPoll(status: BillingProjectStatus) extends ProjectCreationMonitorMessage
+  case class ScheduleNextPoll(status: BillingProjectStatus, interval: FiniteDuration) extends ProjectCreationMonitorMessage
   case class Fail(failedOps: Seq[ActiveOperationRecord]) extends ProjectCreationMonitorMessage
   case object Success extends ProjectCreationMonitorMessage
 
@@ -59,7 +60,7 @@ class ProjectCreationMonitor(projectName: String,
     case PollForStatus(status) =>
       pollForStatus(status) pipeTo self
 
-    case ScheduleNextPoll(status) => scheduleNextPoll(status)
+    case ScheduleNextPoll(status, interval) => scheduleNextPoll(status, interval)
 
     //stop because project creation completed successfully
     case Success => stop(self)
@@ -77,13 +78,13 @@ class ProjectCreationMonitor(projectName: String,
       stop(self)
   }
 
-  def scheduleNextPoll(status: BillingProjectStatus): Unit = {
+  def scheduleNextPoll(status: BillingProjectStatus, pollTime: FiniteDuration = pollInterval): Unit = {
     context.system.scheduler.scheduleOnce(pollInterval, self, PollForStatus(status))
   }
 
   def resumeInflightProject: Future[ProjectCreationMonitorMessage] = {
     dbRef.inTransaction { da => da.billingProjectQuery.getBillingProject(projectName) } map {
-      case Some(bp) => PollForStatus(bp.status)
+      case Some(bp) => ScheduleNextPoll(bp.status, FiniteDuration((Random.nextDouble() * pollInterval).toMillis, MILLISECONDS))
       case None => throw new WorkbenchException(s"ProjectCreationMonitor asked to find missing project $projectName")
     }
   }
@@ -142,7 +143,7 @@ class ProjectCreationMonitor(projectName: String,
         getNextStatusMessage(status)
       } else {
         //not done yet; schedule next poll
-        ScheduleNextPoll(status)
+        ScheduleNextPoll(status, pollInterval)
       }
     }
   }
