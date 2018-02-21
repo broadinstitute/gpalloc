@@ -139,6 +139,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
         }){
           case t: HttpResponseException if t.getStatusCode == 429 =>
             //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
+            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
             new CRMOperation().setDone(false).setError(null)
         }.map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
@@ -150,6 +151,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
         }){
           case t: HttpResponseException if t.getStatusCode == 429 =>
             //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
+            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
             new SMOperation().setDone(false).setError(null)
         }.map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
