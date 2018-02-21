@@ -4,8 +4,12 @@ import java.io.{PrintWriter, StringWriter}
 
 import akka.actor.Status.Failure
 import akka.actor.{Actor, Cancellable, Props}
+import akka.contrib.throttle.TimerBasedThrottler
+import akka.contrib.throttle.Throttler.{RateInt, SetTarget}
 import akka.pattern._
+import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, DataAccess, DbReference}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
@@ -26,14 +30,17 @@ object ProjectCreationMonitor {
   case class PollForStatus(status: BillingProjectStatus) extends ProjectCreationMonitorMessage
   case class ScheduleNextPoll(status: BillingProjectStatus) extends ProjectCreationMonitorMessage
   case class Fail(failedOps: Seq[ActiveOperationRecord]) extends ProjectCreationMonitorMessage
+
+  case class GoogleThrottleOp(googleOp: ActiveOperationRecord) extends ProjectCreationMonitorMessage
+
   case object Success extends ProjectCreationMonitorMessage
 
   def props(projectName: String,
             billingAccount: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
-            pollInterval: FiniteDuration): Props = {
-    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, pollInterval))
+            gpAllocConfig: GPAllocConfig): Props = {
+    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig))
   }
 }
 
@@ -41,11 +48,16 @@ class ProjectCreationMonitor(projectName: String,
                              billingAccount: String,
                              dbRef: DbReference,
                              googleDAO: GoogleDAO,
-                             pollInterval: FiniteDuration)
+                             gpAllocConfig: GPAllocConfig)
   extends Actor
   with LazyLogging {
 
   import context._
+
+  //yes this is deprecated. no i'm not going to move to akka streams
+  //this is for GCP ratelimit, which is 10 do-things-to-projects ops per second
+  val throttler = system.actorOf(Props(classOf[TimerBasedThrottler], gpAllocConfig.opsPerSecondThrottle msgsPer 1.second))
+  throttler ! SetTarget(Some(self))
 
   override def receive: PartialFunction[Any, Unit] = {
     case WakeUp =>
@@ -58,6 +70,10 @@ class ProjectCreationMonitor(projectName: String,
       completeSetup pipeTo self
     case PollForStatus(status) =>
       pollForStatus(status) pipeTo self
+
+    //special message we use to throttle ourselves
+    case GoogleThrottleOp(googleOp) =>
+      googleThrottleOp(googleOp) pipeTo sender
 
     case ScheduleNextPoll(status) => scheduleNextPoll(status)
 
@@ -78,7 +94,7 @@ class ProjectCreationMonitor(projectName: String,
   }
 
   def scheduleNextPoll(status: BillingProjectStatus): Unit = {
-    context.system.scheduler.scheduleOnce(pollInterval, self, PollForStatus(status))
+    context.system.scheduler.scheduleOnce(gpAllocConfig.projectMonitorPollInterval, self, PollForStatus(status))
   }
 
   def resumeInflightProject: Future[ProjectCreationMonitorMessage] = {
@@ -125,13 +141,17 @@ class ProjectCreationMonitor(projectName: String,
 
   //checks Google for status of active operations and figures out what next
   def pollForStatus(status: BillingProjectStatus): Future[ProjectCreationMonitorMessage] = {
+    //timeout for self ? GoogleThrottleOp
+    implicit val timeout = Timeout(5 seconds)
+
     logger.info(s"ProjectCreationMonitor.pollForStatus $projectName $status")
     val updatedOpsF = for {
       //get ops in progress
       activeOpMap <- dbRef.inTransaction { da => da.operationQuery.getActiveOperationsByType(projectName) }
       activeCurrentStatusOps = activeOpMap.getOrElse(status, Seq())
-      //ask google
-      updatedOps <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => googleDAO.pollOperation(op) }
+      //ask google, but throttle ourselves
+      updatedOpsAny <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => throttler ? GoogleThrottleOp(op) }
+      updatedOps = updatedOpsAny.map(_.asInstanceOf[ActiveOperationRecord])
       //update the db with new op status
       _ <- dbRef.inTransaction { da => da.operationQuery.updateOperations(updatedOps) }
     } yield {
@@ -152,6 +172,10 @@ class ProjectCreationMonitor(projectName: String,
         ScheduleNextPoll(status)
       }
     }
+  }
+
+  def googleThrottleOp(op: ActiveOperationRecord): Future[ActiveOperationRecord] = {
+    googleDAO.pollOperation(op)
   }
 
   def getNextStatusMessage(status: BillingProjectStatus.BillingProjectStatus): ProjectCreationMonitorMessage = {

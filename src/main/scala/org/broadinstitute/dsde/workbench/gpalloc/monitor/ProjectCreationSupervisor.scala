@@ -87,7 +87,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   def createChildActor(projectName: String): ActorRef = {
     //use context.actorOf so we create children that will be killed if we get PoisonPilled
-    context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig.projectMonitorPollInterval), monitorName(projectName))
+    context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig), monitorName(projectName))
   }
 
   //TODO: hook this up. drop the database, optionally delete the projects
