@@ -12,7 +12,7 @@ import com.google.api.services.admin.directory.DirectoryScopes
 import com.google.api.services.cloudbilling.Cloudbilling
 import com.google.api.services.cloudbilling.model.ProjectBillingInfo
 import com.google.api.services.cloudresourcemanager.CloudResourceManager
-import com.google.api.services.cloudresourcemanager.model.{Binding, Policy, Project, SetIamPolicyRequest}
+import com.google.api.services.cloudresourcemanager.model.{Binding, Project, SetIamPolicyRequest, Operation => CRMOperation}
 import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.genomics.GenomicsScopes
@@ -20,7 +20,7 @@ import com.google.api.services.iam.v1.Iam
 import com.google.api.services.iam.v1.model.{ServiceAccount, ServiceAccountKey}
 import com.google.api.services.plus.PlusScopes
 import com.google.api.services.servicemanagement.ServiceManagement
-import com.google.api.services.servicemanagement.model.EnableServiceRequest
+import com.google.api.services.servicemanagement.model.{EnableServiceRequest, Operation => SMOperation}
 import com.google.api.services.storage.model.Bucket.Lifecycle
 import com.google.api.services.storage.model.Bucket.Lifecycle.Rule.{Action, Condition}
 import com.google.api.services.storage.model.{Bucket, BucketAccessControl, ObjectAccessControl}
@@ -134,16 +134,24 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     // there is not much else to be done... too bad scala does not have duck typing.
     operation.operationType match {
       case CreatingProject =>
-        retryWhen500orGoogleError(() => {
+        retryWithRecoverWhen500orGoogleError(() => {
           executeGoogleRequest(cloudResources.operations().get(operation.operationId))
-        }).map { op =>
+        }){
+          case t: HttpResponseException if t.getStatusCode == 429 =>
+            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
+            new CRMOperation().setDone(false).setError(null)
+        }.map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
 
       case EnablingServices =>
-        retryWhen500orGoogleError(() => {
+        retryWithRecoverWhen500orGoogleError(() => {
           executeGoogleRequest(servicesManager.operations().get(operation.operationId))
-        }).map { op =>
+        }){
+          case t: HttpResponseException if t.getStatusCode == 429 =>
+            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
+            new SMOperation().setDone(false).setError(null)
+        }.map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
     }
