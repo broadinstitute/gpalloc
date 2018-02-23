@@ -29,7 +29,6 @@ VAULT_TOKEN=$(cat /etc/vault-token-dsde)
 OUTPUT_DIR=app
 INPUT_DIR=configs
 IMAGE=${IMAGE:-develop}
-ENVIRONMENT=dev
 
 docker run --rm  -v $PWD:/working \
     -e APP_NAME=$PROJECT \
