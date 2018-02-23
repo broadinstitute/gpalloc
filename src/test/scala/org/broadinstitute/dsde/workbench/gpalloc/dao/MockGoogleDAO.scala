@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.dao
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 
 import scala.collection.mutable
@@ -30,7 +31,7 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
     Future.successful(())
   }
 
-  def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
+  def pollOperation(operation: ActiveOperationRecord, throttler: Throttler): Future[ActiveOperationRecord] = {
     if(!pollException) {
       polledOpIds += operation.operationId
       Future.successful(operation.copy(done=operationsDoneYet, errorMessage = if(operationsReturnError) Some("boom") else None))
@@ -44,7 +45,7 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
     Future.successful(ActiveOperationRecord(projectName, CreatingProject, randomOpName(), done = false, None))
   }
 
-  def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
+  def enableCloudServices(projectName: String, billingAccount: String, throttler: Throttler): Future[Seq[ActiveOperationRecord]] = {
     enabledProjects += projectName
     Future.successful(servicesToEnable map { svc =>
       ActiveOperationRecord(projectName, EnablingServices, randomOpName(Some(svc)), done = false, None)

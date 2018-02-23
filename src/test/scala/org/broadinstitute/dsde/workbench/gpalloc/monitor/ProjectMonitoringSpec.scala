@@ -27,6 +27,8 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
   import profile.api._
 
+  val tenMillisPollIntervalConf = gpAllocConfig.copy(projectMonitorPollInterval = 10 millis)
+
   def withSupervisor[T](gDAO: GoogleDAO, gpAllocConfig: GPAllocConfig = gpAllocConfig)(op: TestActorRef[TestProjectCreationSupervisor] => T): T = {
     val monitorRef = TestActorRef[TestProjectCreationSupervisor](TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, gpAllocConfig, this))
 
@@ -118,7 +120,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
   "ProjectCreationMonitor" should "createNewProject" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
-    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, 10 millis)).underlyingActor
+    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
 
     //tell the monitor to create its project
     monitor.createNewProject.futureValue shouldBe PollForStatus(CreatingProject)
@@ -140,7 +142,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
   it should "enableServices" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
-    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, 10 millis)).underlyingActor
+    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
 
     //pretend we've already created the project
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
@@ -170,7 +172,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
   it should "completeSetup" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
-    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, 10 millis)).underlyingActor
+    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
 
     //pretend we've already created the project and enabled services
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
@@ -189,7 +191,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
   it should "poll for active operations" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
-    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, 10 millis)).underlyingActor
+    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
 
     //pretend we've already created the project
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
@@ -207,7 +209,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
   it should "behave when google says the operation errored" in isolatedDbTest {
     val errorGoogleDAO = new MockGoogleDAO(operationsReturnError = true)
 
-    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, errorGoogleDAO, 10 millis)).underlyingActor
+    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, errorGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
 
     //pretend we've already created the project but not polled it yet
     val createdOp = freshOpRecord(newProjectName)

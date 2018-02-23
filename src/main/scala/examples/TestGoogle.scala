@@ -10,9 +10,11 @@ import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
+import akka.contrib.throttle.Throttler.RateInt
 
 import scala.concurrent.{Await, ExecutionContext}
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 //this runs from within intellij.
@@ -38,6 +40,8 @@ object TestGoogle extends App {
 
     val projectName = "gpalloc-dev-develop-sywr9jt"
 
+    val throttler = new Throttler(system, 8 msgsPer 1.second)
+
     testScrubProject(gDAO, projectName)
 
     //testEnableCloudServices(gDAO, projectName, gcsConfig.getString("billingAccount"))
@@ -53,16 +57,16 @@ object TestGoogle extends App {
     }
   }
 
-  def testEnableCloudServices(gDAO: HttpGoogleBillingDAO, projectName: String, billingAccount: String)(implicit ec: ExecutionContext): Unit = {
-    gDAO.enableCloudServices(projectName, billingAccount).onComplete {
+  def testEnableCloudServices(gDAO: HttpGoogleBillingDAO, projectName: String, billingAccount: String, throttler: Throttler)(implicit ec: ExecutionContext): Unit = {
+    gDAO.enableCloudServices(projectName, billingAccount, throttler).onComplete {
       case Success(recs) => println(recs)
       case Failure(e: TokenResponseException) => println(e.getDetails)
       case Failure(e) => println(e.getMessage)
     }
   }
 
-  def testPollOp(gDAO: HttpGoogleBillingDAO, rec: ActiveOperationRecord)(implicit ec: ExecutionContext): Unit = {
-    gDAO.pollOperation(rec).onComplete {
+  def testPollOp(gDAO: HttpGoogleBillingDAO, rec: ActiveOperationRecord, throttler: Throttler)(implicit ec: ExecutionContext): Unit = {
+    gDAO.pollOperation(rec, throttler).onComplete {
       case Success(recs) => println(recs)
       case Failure(e) => println(e.toString)
     }

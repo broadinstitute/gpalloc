@@ -6,11 +6,14 @@ import akka.actor.Status.Failure
 import akka.actor.{Actor, Cancellable, Props}
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
+import akka.contrib.throttle.Throttler.RateInt
+import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, DataAccess, DbReference}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationMonitor._
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import slick.dbio.DBIO
 
@@ -33,8 +36,8 @@ object ProjectCreationMonitor {
             billingAccount: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
-            pollInterval: FiniteDuration): Props = {
-    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, pollInterval))
+            gpAllocConfig: GPAllocConfig): Props = {
+    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig))
   }
 }
 
@@ -42,11 +45,13 @@ class ProjectCreationMonitor(projectName: String,
                              billingAccount: String,
                              dbRef: DbReference,
                              googleDAO: GoogleDAO,
-                             pollInterval: FiniteDuration)
+                             gpAllocConfig: GPAllocConfig)
   extends Actor
   with LazyLogging {
 
   import context._
+
+  val googleOpThrottler = new Throttler(system, gpAllocConfig.opsPerSecondThrottle msgsPer 1.second)
 
   override def receive: PartialFunction[Any, Unit] = {
     case WakeUp =>
@@ -78,13 +83,13 @@ class ProjectCreationMonitor(projectName: String,
       stop(self)
   }
 
-  def scheduleNextPoll(status: BillingProjectStatus, pollTime: FiniteDuration = pollInterval): Unit = {
-    context.system.scheduler.scheduleOnce(pollInterval, self, PollForStatus(status))
+  def scheduleNextPoll(status: BillingProjectStatus, pollTime: FiniteDuration = gpAllocConfig.projectMonitorPollInterval): Unit = {
+    context.system.scheduler.scheduleOnce(pollTime, self, PollForStatus(status))
   }
 
   def resumeInflightProject: Future[ProjectCreationMonitorMessage] = {
     dbRef.inTransaction { da => da.billingProjectQuery.getBillingProject(projectName) } map {
-      case Some(bp) => ScheduleNextPoll(bp.status, FiniteDuration((Random.nextDouble() * pollInterval).toMillis, MILLISECONDS))
+      case Some(bp) => ScheduleNextPoll(bp.status, FiniteDuration((Random.nextDouble() * gpAllocConfig.projectMonitorPollInterval).toMillis, MILLISECONDS))
       case None => throw new WorkbenchException(s"ProjectCreationMonitor asked to find missing project $projectName")
     }
   }
@@ -100,7 +105,7 @@ class ProjectCreationMonitor(projectName: String,
 
   def enableServices: Future[ProjectCreationMonitorMessage] = {
     for {
-      serviceOps <- googleDAO.enableCloudServices(projectName, billingAccount)
+      serviceOps <- googleDAO.enableCloudServices(projectName, billingAccount, googleOpThrottler)
       _ <- dbRef.inTransaction { da => DBIO.seq(
           da.billingProjectQuery.updateStatus(projectName, EnablingServices),
           da.operationQuery.saveNewOperations(serviceOps)) }
@@ -125,7 +130,7 @@ class ProjectCreationMonitor(projectName: String,
       activeOpMap <- dbRef.inTransaction { da => da.operationQuery.getActiveOperationsByType(projectName) }
       activeCurrentStatusOps = activeOpMap.getOrElse(status, Seq())
       //ask google
-      updatedOps <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => googleDAO.pollOperation(op) }
+      updatedOps <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => googleDAO.pollOperation(op, googleOpThrottler) }
       //update the db with new op status
       _ <- dbRef.inTransaction { da => da.operationQuery.updateOperations(updatedOps) }
     } yield {
@@ -143,7 +148,7 @@ class ProjectCreationMonitor(projectName: String,
         getNextStatusMessage(status)
       } else {
         //not done yet; schedule next poll
-        ScheduleNextPoll(status, pollInterval)
+        ScheduleNextPoll(status, gpAllocConfig.projectMonitorPollInterval)
       }
     }
   }

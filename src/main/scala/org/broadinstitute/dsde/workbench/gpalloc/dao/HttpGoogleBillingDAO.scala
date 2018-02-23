@@ -30,6 +30,7 @@ import org.broadinstitute.dsde.workbench.google.GoogleUtilities
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus, GPAllocException}
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
 
@@ -113,13 +114,9 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
   }
 
   override def scrubBillingProject(projectName: String): Future[Unit] = {
-    //start these early so they're async
-    val cleanupPolicyF = cleanupPolicyBindings(projectName)
-    val cleanupSAKeysF = cleanupPetSAKeys(projectName)
-
     for {
-      _ <- cleanupPolicyF
-      _ <- cleanupSAKeysF
+      _ <- cleanupPolicyBindings(projectName)
+      _ <- cleanupPetSAKeys(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
     } yield {
       //nah
@@ -127,33 +124,23 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
   }
 
   //poll google for what's going on
-  override def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
+  override def pollOperation(operation: ActiveOperationRecord, throttler: Throttler): Future[ActiveOperationRecord] = {
 
     // this code is a colossal DRY violation but because the operations collection is different
     // for cloudResManager and servicesManager and they return different but identical Status objects
     // there is not much else to be done... too bad scala does not have duck typing.
     operation.operationType match {
       case CreatingProject =>
-        retryWithRecoverWhen500orGoogleError(() => {
+        throttler.throttle(() => retryWhen500orGoogleError(() => {
           executeGoogleRequest(cloudResources.operations().get(operation.operationId))
-        }){
-          case t: HttpResponseException if t.getStatusCode == 429 =>
-            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
-            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
-            new CRMOperation().setDone(false).setError(null)
-        }.map { op =>
+        })).map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
 
       case EnablingServices =>
-        retryWithRecoverWhen500orGoogleError(() => {
+        throttler.throttle(() => retryWhen500orGoogleError(() => {
           executeGoogleRequest(servicesManager.operations().get(operation.operationId))
-        }){
-          case t: HttpResponseException if t.getStatusCode == 429 =>
-            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
-            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
-            new SMOperation().setDone(false).setError(null)
-        }.map { op =>
+        })).map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
     }
@@ -190,13 +177,21 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
   }
 
   // part 2
-  override def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
+  override def enableCloudServices(projectName: String, billingAccount: String, throttler: Throttler): Future[Seq[ActiveOperationRecord]] = {
 
     val billingManager = billing
     val serviceManager = servicesManager
 
     val projectResourceName = s"projects/$projectName"
     val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component")
+
+    def enableGoogleService(service: String) = {
+      retryWhen500orGoogleError(() => {
+        executeGoogleRequest(serviceManager.services().enable(service, new EnableServiceRequest().setConsumerId(s"project:${projectName}")))
+      }) map { googleOperation =>
+        ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+      }
+    }
 
     // all of these things should be idempotent
     for {
@@ -206,11 +201,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
       })
 
       // enable appropriate google apis
-      operations <- Future.sequence(services.map { service => retryWhen500orGoogleError(() => {
-        executeGoogleRequest(serviceManager.services().enable(service, new EnableServiceRequest().setConsumerId(s"project:${projectName}")))
-      }) map { googleOperation =>
-        ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
-      }})
+      operations <- throttler.sequence(services.map { service => () => enableGoogleService(service) })
 
     } yield {
       operations
