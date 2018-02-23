@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc.util
 
-import akka.actor.{Actor, ActorSystem, Props}
+import akka.actor.{Actor, ActorContext, ActorSystem, Props}
 import akka.contrib.throttle.Throttler.{Rate, SetTarget}
 import akka.contrib.throttle.TimerBasedThrottler
 import akka.pattern._
@@ -9,12 +9,12 @@ import akka.util.Timeout
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
-class Throttler(system: ActorSystem, throttleRate: Rate, name: String) {
+class Throttler(context: ActorContext, throttleRate: Rate, name: String) {
 
-  val throttleWorker = system.actorOf(ThrottleWorker.props(), s"throttleWorker-$name")
+  val throttleWorker = context.actorOf(ThrottleWorker.props(), s"throttleWorker-$name")
 
   //yes this is deprecated. no i'm not going to move to akka streams
-  val throttler = system.actorOf(Props(classOf[TimerBasedThrottler], throttleRate), s"throttler-$name")
+  val throttler = context.actorOf(Props(classOf[TimerBasedThrottler], throttleRate), s"throttler-$name")
   throttler ! SetTarget(Some(throttleWorker))
 
   case class Work[T](op: () => Future[T])

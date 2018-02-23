@@ -38,7 +38,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   import context._
 
-  val projectCreationThrottler = new Throttler(system, gpAllocConfig.projectsPerSecondThrottle msgsPer 1.second, "ProjectCreation")
+  val projectCreationThrottler = new Throttler(context, gpAllocConfig.projectsPerSecondThrottle msgsPer 1.second, "ProjectCreation")
 
   var gpAlloc: GPAllocService = _
 

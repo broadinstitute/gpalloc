@@ -40,8 +40,6 @@ object TestGoogle extends App {
 
     val projectName = "gpalloc-dev-develop-sywr9jt"
 
-    val throttler = new Throttler(system, 8 msgsPer 1.second, "TestGoogle")
-
     testScrubProject(gDAO, projectName)
 
     //testEnableCloudServices(gDAO, projectName, gcsConfig.getString("billingAccount"))
