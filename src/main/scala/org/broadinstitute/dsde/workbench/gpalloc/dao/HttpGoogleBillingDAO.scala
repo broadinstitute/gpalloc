@@ -283,11 +283,11 @@ class HttpGoogleBillingDAO(appName: String,
 
   def cleanupPolicyBindings(projectName: String): Future[Unit] = {
     for {
-      existingPolicy <- retryWhen500orGoogleError(() => {
+      existingPolicy <- opThrottler.throttle( () => retryWhen500orGoogleError(() => {
         executeGoogleRequest(cloudResources.projects().getIamPolicy(projectName, null))
-      })
+      }))
 
-      _ <- retryWhen500orGoogleError(() => {
+      _ <- opThrottler.throttle( () => retryWhen500orGoogleError(() => {
         val existingPolicies: Map[String, Seq[String]] = existingPolicy.getBindings.asScala.map { policy => policy.getRole -> policy.getMembers.asScala }.toMap
 
         val updatedPolicies = existingPolicies.map { case (role, members) =>
@@ -300,8 +300,23 @@ class HttpGoogleBillingDAO(appName: String,
         // when setting IAM policies, always reuse the existing policy so the etag is preserved.
         val policyRequest = new SetIamPolicyRequest().setPolicy(existingPolicy.setBindings(updatedPolicies.asJava))
         executeGoogleRequest(cloudResources.projects().setIamPolicy(projectName, policyRequest))
-      })
+      }))
     } yield ()
+  }
+
+  //stolen: https://gist.github.com/ryanlecompte/6313683
+  def sequentially[A,T](items: Seq[A])(f: A => Future[T]): Future[Unit] = {
+    items.headOption match {
+      case Some(nextItem) =>
+        val fut = f(nextItem)
+        fut.flatMap { _ =>
+          // successful, let's move on to the next!
+          sequentially(items.tail)(f)
+        }
+      case None =>
+        // nothing left to process
+        Future.successful(())
+    }
   }
 
   //removes all acls added to the cromwell auth bucket that aren't the project owner/editor ones
@@ -310,11 +325,11 @@ class HttpGoogleBillingDAO(appName: String,
     for {
       oAcls <- googleRq( storage.defaultObjectAccessControls.list(bucketName) )
       deleteOAcls = oAcls.getItems.asScala.filter(a => shouldDelete(a.getEntity))
-      _ <- Future.traverse(deleteOAcls) { d => googleRq(storage.defaultObjectAccessControls.delete(bucketName, d.getEntity)) }
+      _ <- sequentially(deleteOAcls) { d => googleRq(storage.defaultObjectAccessControls.delete(bucketName, d.getEntity)) }
 
       bAcls <- googleRq( storage.bucketAccessControls.list(bucketName) )
       deleteBAcls = bAcls.getItems.asScala.filter(a => shouldDelete(a.getEntity))
-      _ <- Future.traverse(deleteBAcls) { d => googleRq(storage.bucketAccessControls.delete(bucketName, d.getEntity)) }
+      _ <- sequentially(deleteBAcls) { d => googleRq(storage.bucketAccessControls.delete(bucketName, d.getEntity)) }
     } yield {
       //nah
     }
@@ -336,7 +351,7 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
   def removeKeysForPets(projectName: String, pets: Seq[ServiceAccount]): Future[Unit] = {
-    Future.traverse(pets){ pet => //these run in parallel
+    sequentially(pets){ pet =>
       for {
         petKeys <- googleRq(iam.projects.serviceAccounts.keys.list(gSAPath(projectName, pet.getEmail)))
         _ <- removeKeysForPet(projectName, pet.getEmail, petKeys.getKeys.asScala)
@@ -347,7 +362,7 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
   def removeKeysForPet(projectName: String, petEmail: String, petKeys: Seq[ServiceAccountKey]): Future[Unit] = {
-    Future.traverse(petKeys){ petKey => //these run in parallel
+    sequentially(petKeys){ petKey =>
       for {
         _ <- googleRq(iam.projects.serviceAccounts.keys.delete(gKeyPath(projectName, petEmail, petKey.getName)))
       } yield {

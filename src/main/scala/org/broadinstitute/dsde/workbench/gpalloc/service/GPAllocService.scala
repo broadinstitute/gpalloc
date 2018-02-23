@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Random, Success}
+import scala.util.{Failure, Random, Success}
 
 case class NoGoogleProjectAvailable()
   extends GPAllocException(s"Sorry, no free google projects. Make your own", StatusCodes.NotFound)
@@ -71,7 +71,8 @@ class GPAllocService(protected val dbRef: DbReference,
         } yield {
           logger.info(s"released ${if(becauseAbandoned) "abandoned" else ""} project $project")
         }
-      case _ => //never mind
+      case Failure(e) =>
+        logger.error(s"failed to release $project because $e")
     }
     authCheck
   }
