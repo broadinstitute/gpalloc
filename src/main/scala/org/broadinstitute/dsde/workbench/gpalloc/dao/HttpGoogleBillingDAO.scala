@@ -283,11 +283,11 @@ class HttpGoogleBillingDAO(appName: String,
 
   def cleanupPolicyBindings(projectName: String): Future[Unit] = {
     for {
-      existingPolicy <- retryWhen500orGoogleError(() => {
+      existingPolicy <- opThrottler.throttle( () => retryWhen500orGoogleError(() => {
         executeGoogleRequest(cloudResources.projects().getIamPolicy(projectName, null))
-      })
+      }))
 
-      _ <- retryWhen500orGoogleError(() => {
+      _ <- opThrottler.throttle( () => retryWhen500orGoogleError(() => {
         val existingPolicies: Map[String, Seq[String]] = existingPolicy.getBindings.asScala.map { policy => policy.getRole -> policy.getMembers.asScala }.toMap
 
         val updatedPolicies = existingPolicies.map { case (role, members) =>
@@ -300,7 +300,7 @@ class HttpGoogleBillingDAO(appName: String,
         // when setting IAM policies, always reuse the existing policy so the etag is preserved.
         val policyRequest = new SetIamPolicyRequest().setPolicy(existingPolicy.setBindings(updatedPolicies.asJava))
         executeGoogleRequest(cloudResources.projects().setIamPolicy(projectName, policyRequest))
-      })
+      }))
     } yield ()
   }
 
