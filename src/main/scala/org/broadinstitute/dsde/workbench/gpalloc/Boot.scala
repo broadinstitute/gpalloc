@@ -51,6 +51,7 @@ object Boot extends App with LazyLogging {
       gpAllocConfig.opsThrottle,
       gpAllocConfig.opsThrottlePerDuration)
 
+    ProjectCreationSupervisor.gpAllocConfig = gpAllocConfig
     val projectCreationSupervisor = system.actorOf(
       ProjectCreationSupervisor.props(
         defaultBillingAccount,

@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
-import akka.actor.SupervisorStrategy.Restart
+import akka.actor.SupervisorStrategy.{Restart, Stop}
 import akka.actor.{Actor, ActorRef, OneForOneStrategy, PoisonPill, Props, SupervisorStrategy}
 import akka.contrib.throttle.TimerBasedThrottler
 import akka.contrib.throttle.Throttler.{RateInt, SetTarget}
@@ -15,13 +15,23 @@ import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Random
 
 object ProjectCreationSupervisor {
+  var gpAllocConfig: GPAllocConfig = ???
+
+  private def randomProjectName(): String = {
+    //strip out things GCP doesn't like in project IDs: uppercase, underscores, and things that are too long
+    val sanitizedPrefix = gpAllocConfig.projectPrefix.toLowerCase.replaceAll("[^a-z0-9-]", "").take(22)
+    s"$sanitizedPrefix-${Random.alphanumeric.take(7).mkString.toLowerCase}"
+  }
+
   sealed trait ProjectCreationSupervisorMessage
-  case class RequestNewProject(projectName: String) extends ProjectCreationSupervisorMessage
+  case class RequestNewProject(projectName: String = randomProjectName()) extends ProjectCreationSupervisorMessage
   case object ResumeAllProjects extends ProjectCreationSupervisorMessage
   case class RegisterGPAllocService(service: GPAllocService) extends ProjectCreationSupervisorMessage
   case object SweepAbandonedProjects extends ProjectCreationSupervisorMessage
+  case class ProjectMonitoringFailed(projectName: String) extends ProjectCreationSupervisorMessage
 
   //secret message that only we send to ourselves
   protected[monitor] case class CreateProject(projectName: String) extends ProjectCreationSupervisorMessage
@@ -62,7 +72,13 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   }
 
   //if a project creation monitor dies, restart it
-  override val supervisorStrategy: SupervisorStrategy = OneForOneStrategy() { case _ => Restart }
+  override val supervisorStrategy =
+    OneForOneStrategy() {
+      case e: MonitorFailedException =>
+        projectMonitoringFailed(e.projectName) //this creates a new project
+        Stop
+      case _ => Restart
+    }
 
   val monitorNameBase = "bpmon-"
   def monitorName(bp: String) = s"$monitorNameBase$bp"
@@ -108,6 +124,14 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   def createProject(projectName: String): Unit = {
     val newProjectMonitor = createChildActor(projectName)
     newProjectMonitor ! ProjectCreationMonitor.CreateProject
+  }
+
+  def projectMonitoringFailed(projectName: String): Unit = {
+    for {
+      _ <- dbRef.inTransaction { da => da.billingProjectQuery.updateStatus(projectName, BillingProjectStatus.Deleted) }
+      _ <- googleDAO.deleteProject(projectName)
+    } yield () //one chance
+    self ! RequestNewProject() //make a new one to replace this broken one
   }
 
   def createChildActor(projectName: String): ActorRef = {

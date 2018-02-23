@@ -24,7 +24,10 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import java.time.{Duration => JDuration}
 
+import org.broadinstitute.dsde.workbench.gpalloc.mock.MockGPAllocService
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
+
+import scala.util.Failure
 
 class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
 
@@ -34,6 +37,9 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
   def withSupervisor[T](gDAO: GoogleDAO, gpAllocConfig: GPAllocConfig = gpAllocConfig)(op: TestActorRef[TestProjectCreationSupervisor] => T): T = {
     val monitorRef = TestActorRef[TestProjectCreationSupervisor](TestProjectCreationSupervisor.props(testBillingAccount, dbRef, gDAO, gpAllocConfig, this))
+
+    //make this; it'll register itself w/the monitor
+    val mockGPAllocService = new MockGPAllocService(dbRef, swaggerConfig, monitorRef, gDAO, gpAllocConfig)(scala.concurrent.ExecutionContext.Implicits.global)
 
     val result = op(monitorRef)
     monitorRef ! PoisonPill
@@ -122,6 +128,22 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     }
   }
 
+  it should "create a new project when it's told a monitor fails" in isolatedDbTest {
+    val mockGoogleDAO = new MockGoogleDAO(pollException = true)
+
+    withSupervisor(mockGoogleDAO) { supervisor =>
+      supervisor ! ProjectCreationSupervisor.CreateProject(newProjectName)
+
+      //this will now get into an endless loop of creating a project, google explodes, restart...
+      //we'll look for one restart
+
+      eventually {
+        mockGoogleDAO.createdProjects.size shouldEqual 2
+        mockGoogleDAO.deletedProjects should contain(newProjectName)
+      }
+    }
+  }
+
   "ProjectCreationMonitor" should "createNewProject" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
 
@@ -184,7 +206,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     mockGoogleDAO.polledOpIds should contain theSameElementsAs enablingOps.map{ _.operationId }
   }
 
-  it should "behave when google says the operation errored" in isolatedDbTest {
+  it should "return a Failure when google says the operation errored" in isolatedDbTest {
     val errorGoogleDAO = new MockGoogleDAO(operationsReturnError = true)
 
     val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, errorGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
