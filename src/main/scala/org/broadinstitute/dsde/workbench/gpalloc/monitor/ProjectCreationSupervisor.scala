@@ -41,7 +41,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   //Google throttles project creation requests to 1 a second.
   val projectCreationThrottler = new Throttler(context, gpAllocConfig.projectsPerSecondThrottle msgsPer 1.second, "ProjectCreation")
 
-  //Google throttles other project service management requests (like operation polls) to 10 a second per project.
+  //Google throttles other project service management requests (like operation polls) to 200 calls per 100 seconds.
   //However this is per SOURCE project of the SA making the requests, NOT the project you're making the request ON!
   val googleOpThrottler = new Throttler(context, gpAllocConfig.opsThrottle msgsPer gpAllocConfig.opsThrottlePerDuration, "GoogleOpThrottler")
 
