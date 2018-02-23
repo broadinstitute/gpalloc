@@ -35,9 +35,8 @@ object ProjectCreationMonitor {
             billingAccount: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
-            gpAllocConfig: GPAllocConfig,
-            googleOpThrottler: Throttler): Props = {
-    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig, googleOpThrottler))
+            gpAllocConfig: GPAllocConfig): Props = {
+    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig))
   }
 }
 
@@ -45,8 +44,7 @@ class ProjectCreationMonitor(projectName: String,
                              billingAccount: String,
                              dbRef: DbReference,
                              googleDAO: GoogleDAO,
-                             gpAllocConfig: GPAllocConfig,
-                             googleOpThrottler: Throttler)
+                             gpAllocConfig: GPAllocConfig)
   extends Actor
   with LazyLogging {
 
@@ -105,7 +103,7 @@ class ProjectCreationMonitor(projectName: String,
 
   def enableServices: Future[ProjectCreationMonitorMessage] = {
     for {
-      serviceOps <- googleDAO.enableCloudServices(projectName, billingAccount, googleOpThrottler)
+      serviceOps <- googleDAO.enableCloudServices(projectName, billingAccount)
       _ <- dbRef.inTransaction { da => DBIO.seq(
           da.billingProjectQuery.updateStatus(projectName, EnablingServices),
           da.operationQuery.saveNewOperations(serviceOps)) }
@@ -131,7 +129,7 @@ class ProjectCreationMonitor(projectName: String,
       activeOpMap <- dbRef.inTransaction { da => da.operationQuery.getActiveOperationsByType(projectName) }
       activeCurrentStatusOps = activeOpMap.getOrElse(status, Seq())
       //ask google
-      updatedOps <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => googleDAO.pollOperation(op, googleOpThrottler) }
+      updatedOps <- Future.traverse(activeCurrentStatusOps.filter(!_.done)) { op => googleDAO.pollOperation(op) }
       //update the db with new op status
       _ <- dbRef.inTransaction { da => da.operationQuery.updateOperations(updatedOps) }
     } yield {

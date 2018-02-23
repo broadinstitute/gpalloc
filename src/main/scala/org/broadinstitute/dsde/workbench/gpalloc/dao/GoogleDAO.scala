@@ -10,9 +10,9 @@ abstract class GoogleDAO {
   def transferProjectOwnership(project: String, owner: String): Future[AssignedProject]
   def scrubBillingProject(projectName: String): Future[Unit]
 
-  def pollOperation(operation: ActiveOperationRecord, throttler: Throttler): Future[ActiveOperationRecord]
+  def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord]
 
   def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord]
-  def enableCloudServices(projectName: String, billingAccount: String, throttler: Throttler): Future[Seq[ActiveOperationRecord]]
+  def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]]
   def setupProjectBucketAccess(projectName: String): Future[Unit]
 }

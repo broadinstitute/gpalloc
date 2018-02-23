@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.gpalloc.util
 
-import akka.actor.{Actor, ActorContext, Props}
-import akka.contrib.throttle.Throttler.{Rate, SetTarget}
+import akka.actor.{Actor, ActorContext, ActorRefFactory, Props}
+import akka.contrib.throttle.Throttler._
 import akka.contrib.throttle.TimerBasedThrottler
 import akka.pattern._
 import akka.util.Timeout
@@ -9,12 +9,14 @@ import akka.util.Timeout
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 
-class Throttler(context: ActorContext, throttleRate: Rate, name: String) {
+//Every call to throttle() costs one ticket. Every ticketRefreshTime, the number of tickets is reset to
+//tickets. If no tickets are available when throttle() is called, the throttler will wait until more are available.
+class Throttler(actorFactory: ActorRefFactory, tickets: Int, ticketRefreshTime: FiniteDuration, name: String) {
 
-  val throttleWorker = context.actorOf(ThrottleWorker.props(), s"throttleWorker-$name")
+  val throttleWorker = actorFactory.actorOf(ThrottleWorker.props(), s"throttleWorker-$name")
 
   //yes this is deprecated. no i'm not going to move to akka streams
-  val throttler = context.actorOf(Props(classOf[TimerBasedThrottler], throttleRate), s"throttler-$name")
+  val throttler = actorFactory.actorOf(Props(classOf[TimerBasedThrottler], tickets msgsPer ticketRefreshTime), s"throttler-$name")
   throttler ! SetTarget(Some(throttleWorker))
 
   case class Work[T](op: () => Future[T])

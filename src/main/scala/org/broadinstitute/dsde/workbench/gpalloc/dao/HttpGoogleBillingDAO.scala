@@ -35,10 +35,16 @@ import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInst
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
-class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billingPemEmail: String, billingEmail: String)
+class HttpGoogleBillingDAO(appName: String,
+                           serviceAccountPemFile: String,
+                           billingPemEmail: String,
+                           billingEmail: String,
+                           opsThrottle: Int,
+                           opsThrottlePerDuration: FiniteDuration)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
   extends GoogleDAO with GoogleUtilities {
 
@@ -52,6 +58,10 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
 
   lazy val httpTransport = GoogleNetHttpTransport.newTrustedTransport
   lazy val jsonFactory = JacksonFactory.getDefaultInstance
+
+  //Google throttles other project service management requests (like operation polls) to 200 calls per 100 seconds.
+  //However this is per SOURCE project of the SA making the requests, NOT the project you're making the request ON!
+  val opThrottler = new Throttler(system, opsThrottle, opsThrottlePerDuration, "GoogleOpThrottler")
 
   //giant bundle of scopes we need
   val saScopes = Seq(
@@ -124,21 +134,21 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
   }
 
   //poll google for what's going on
-  override def pollOperation(operation: ActiveOperationRecord, throttler: Throttler): Future[ActiveOperationRecord] = {
+  override def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
 
     // this code is a colossal DRY violation but because the operations collection is different
     // for cloudResManager and servicesManager and they return different but identical Status objects
     // there is not much else to be done... too bad scala does not have duck typing.
     operation.operationType match {
       case CreatingProject =>
-        throttler.throttle(() => retryWhen500orGoogleError(() => {
+        opThrottler.throttle(() => retryWhen500orGoogleError(() => {
           executeGoogleRequest(cloudResources.operations().get(operation.operationId))
         })).map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
 
       case EnablingServices =>
-        throttler.throttle(() => retryWhen500orGoogleError(() => {
+        opThrottler.throttle(() => retryWhen500orGoogleError(() => {
           executeGoogleRequest(servicesManager.operations().get(operation.operationId))
         })).map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
@@ -177,7 +187,7 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
   }
 
   // part 2
-  override def enableCloudServices(projectName: String, billingAccount: String, throttler: Throttler): Future[Seq[ActiveOperationRecord]] = {
+  override def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
 
     val billingManager = billing
     val serviceManager = servicesManager
@@ -196,12 +206,12 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     // all of these things should be idempotent
     for {
     // set the billing account
-      billing <- throttler.throttle( () => retryWhen500orGoogleError(() => {
+      billing <- opThrottler.throttle( () => retryWhen500orGoogleError(() => {
         executeGoogleRequest(billingManager.projects().updateBillingInfo(projectResourceName, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(billingAccount)))
       }))
 
       // enable appropriate google apis
-      operations <- throttler.sequence(services.map { service => { () => enableGoogleService(service) } })
+      operations <- opThrottler.sequence(services.map { service => { () => enableGoogleService(service) } })
 
     } yield {
       operations

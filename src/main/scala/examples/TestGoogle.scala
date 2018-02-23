@@ -36,7 +36,9 @@ object TestGoogle extends App {
       "gpalloc", //appName
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
-      gcsConfig.getString("billingEmail")) //billingEmail -- setServiceAccountUser
+      gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
+      1,
+      1 second)
 
     val projectName = "gpalloc-dev-develop-sywr9jt"
 
@@ -55,16 +57,16 @@ object TestGoogle extends App {
     }
   }
 
-  def testEnableCloudServices(gDAO: HttpGoogleBillingDAO, projectName: String, billingAccount: String, throttler: Throttler)(implicit ec: ExecutionContext): Unit = {
-    gDAO.enableCloudServices(projectName, billingAccount, throttler).onComplete {
+  def testEnableCloudServices(gDAO: HttpGoogleBillingDAO, projectName: String, billingAccount: String)(implicit ec: ExecutionContext): Unit = {
+    gDAO.enableCloudServices(projectName, billingAccount).onComplete {
       case Success(recs) => println(recs)
       case Failure(e: TokenResponseException) => println(e.getDetails)
       case Failure(e) => println(e.getMessage)
     }
   }
 
-  def testPollOp(gDAO: HttpGoogleBillingDAO, rec: ActiveOperationRecord, throttler: Throttler)(implicit ec: ExecutionContext): Unit = {
-    gDAO.pollOperation(rec, throttler).onComplete {
+  def testPollOp(gDAO: HttpGoogleBillingDAO, rec: ActiveOperationRecord)(implicit ec: ExecutionContext): Unit = {
+    gDAO.pollOperation(rec).onComplete {
       case Success(recs) => println(recs)
       case Failure(e) => println(e.toString)
     }
