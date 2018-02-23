@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.service
 
 import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
+import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference}
@@ -27,7 +28,7 @@ class GPAllocService(protected val dbRef: DbReference,
                      projectCreationSupervisor: ActorRef,
                      googleBillingDAO: GoogleDAO,
                      gpAllocConfig: GPAllocConfig)
-                    (implicit val executionContext: ExecutionContext) {
+                    (implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   //on creation, tell the supervisor we exist
   projectCreationSupervisor ! RegisterGPAllocService(this)
@@ -37,14 +38,17 @@ class GPAllocService(protected val dbRef: DbReference,
 
   def requestGoogleProject(userInfo: UserInfo): Future[AssignedProject] = {
     val newProject = dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
-      case Some(projectName) => googleBillingDAO.transferProjectOwnership(projectName, userInfo.userEmail.value)
+      case Some(projectName) =>
+        val xferFuture = googleBillingDAO.transferProjectOwnership(projectName, userInfo.userEmail.value)
+        logger.info(s"assigned project $projectName to ${userInfo.userEmail.value}")
+        xferFuture
       case None => throw NoGoogleProjectAvailable()
     }
     newProject onComplete { _ => maybeCreateNewProjects() }
     newProject
   }
 
-  def releaseGoogleProject(userEmail: WorkbenchEmail, project: String): Future[Unit] = {
+  def releaseGoogleProject(userEmail: WorkbenchEmail, project: String, becauseAbandoned: Boolean = false): Future[Unit] = {
     val authCheck = dbRef.inTransaction { da =>
       da.billingProjectQuery.getAssignedBillingProject(project) map {
         case Some(bp) =>
@@ -65,7 +69,7 @@ class GPAllocService(protected val dbRef: DbReference,
           _ <- googleBillingDAO.scrubBillingProject(project)
           _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
         } yield {
-          ()
+          logger.info(s"released ${if(becauseAbandoned) "abandoned" else ""} project $project")
         }
       case _ => //never mind
     }
@@ -81,7 +85,7 @@ class GPAllocService(protected val dbRef: DbReference,
   def releaseAbandonedProjects(): Future[Unit] = {
     for {
       abandonedProjects <- dbRef.inTransaction { da => da.billingProjectQuery.getAbandonedProjects(gpAllocConfig.abandonmentTime) }
-      _ <- Future.traverse(abandonedProjects) { p => releaseGoogleProject(WorkbenchEmail(p.owner.get), p.billingProjectName) }
+      _ <- Future.traverse(abandonedProjects) { p => releaseGoogleProject(WorkbenchEmail(p.owner.get), p.billingProjectName, becauseAbandoned = true) }
     } yield {
       //meh
     }
