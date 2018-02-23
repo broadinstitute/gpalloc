@@ -1,12 +1,12 @@
 package org.broadinstitute.dsde.workbench.gpalloc.util
 
-import akka.actor.{Actor, ActorContext, ActorSystem, Props}
+import akka.actor.{Actor, ActorContext, Props}
 import akka.contrib.throttle.Throttler.{Rate, SetTarget}
 import akka.contrib.throttle.TimerBasedThrottler
 import akka.pattern._
 import akka.util.Timeout
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 
 class Throttler(context: ActorContext, throttleRate: Rate, name: String) {
@@ -19,7 +19,8 @@ class Throttler(context: ActorContext, throttleRate: Rate, name: String) {
 
   case class Work[T](op: () => Future[T])
 
-  implicit val timeout = Timeout(20 seconds)
+  //This timeout has to be loooong; lots of poll operations may back up the throttle queue for quite a while.
+  implicit val timeout = Timeout(5 minutes)
 
   object ThrottleWorker {
     def props(): Props = {
@@ -34,7 +35,7 @@ class Throttler(context: ActorContext, throttleRate: Rate, name: String) {
       case Work(op) => doWork(op) pipeTo sender
     }
 
-    def doWork[T](op: () => Future[T])(implicit ec: ExecutionContext): Future[Any] = {
+    def doWork[T](op: () => Future[T])(implicit ec: ExecutionContext): Future[T] = {
       op()
     }
   }

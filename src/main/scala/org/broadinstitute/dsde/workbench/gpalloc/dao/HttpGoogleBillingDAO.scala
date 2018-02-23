@@ -196,12 +196,12 @@ class HttpGoogleBillingDAO(appName: String, serviceAccountPemFile: String, billi
     // all of these things should be idempotent
     for {
     // set the billing account
-      billing <- retryWhen500orGoogleError(() => {
+      billing <- throttler.throttle( () => retryWhen500orGoogleError(() => {
         executeGoogleRequest(billingManager.projects().updateBillingInfo(projectResourceName, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(billingAccount)))
-      })
+      }))
 
       // enable appropriate google apis
-      operations <- throttler.sequence(services.map { service => () => enableGoogleService(service) })
+      operations <- throttler.sequence(services.map { service => { () => enableGoogleService(service) } })
 
     } yield {
       operations

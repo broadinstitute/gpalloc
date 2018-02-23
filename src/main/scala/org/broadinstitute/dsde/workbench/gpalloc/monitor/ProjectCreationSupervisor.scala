@@ -38,7 +38,12 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   import context._
 
+  //Google throttles project creation requests to 1 a second.
   val projectCreationThrottler = new Throttler(context, gpAllocConfig.projectsPerSecondThrottle msgsPer 1.second, "ProjectCreation")
+
+  //Google throttles other project service management requests (like operation polls) to 10 a second per project.
+  //However this is per SOURCE project of the SA making the requests, NOT the project you're making the request ON!
+  val googleOpThrottler = new Throttler(context, gpAllocConfig.opsThrottle msgsPer gpAllocConfig.opsThrottlePerDuration, "GoogleOpThrottler")
 
   var gpAlloc: GPAllocService = _
 
@@ -85,7 +90,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   def createChildActor(projectName: String): ActorRef = {
     //use context.actorOf so we create children that will be killed if we get PoisonPilled
-    context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig), monitorName(projectName))
+    context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig, googleOpThrottler), monitorName(projectName))
   }
 
   //TODO: hook this up. drop the database, optionally delete the projects

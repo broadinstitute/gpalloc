@@ -3,10 +3,9 @@ package org.broadinstitute.dsde.workbench.gpalloc.monitor
 import java.io.{PrintWriter, StringWriter}
 
 import akka.actor.Status.Failure
-import akka.actor.{Actor, Cancellable, Props}
+import akka.actor.{Actor, Props}
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
-import akka.contrib.throttle.Throttler.RateInt
 import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, DataAccess, DbReference}
@@ -36,8 +35,9 @@ object ProjectCreationMonitor {
             billingAccount: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
-            gpAllocConfig: GPAllocConfig): Props = {
-    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig))
+            gpAllocConfig: GPAllocConfig,
+            googleOpThrottler: Throttler): Props = {
+    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig, googleOpThrottler))
   }
 }
 
@@ -45,13 +45,12 @@ class ProjectCreationMonitor(projectName: String,
                              billingAccount: String,
                              dbRef: DbReference,
                              googleDAO: GoogleDAO,
-                             gpAllocConfig: GPAllocConfig)
+                             gpAllocConfig: GPAllocConfig,
+                             googleOpThrottler: Throttler)
   extends Actor
   with LazyLogging {
 
   import context._
-
-  val googleOpThrottler = new Throttler(context, gpAllocConfig.opsPerSecondThrottle msgsPer 1.second, projectName)
 
   override def receive: PartialFunction[Any, Unit] = {
     case WakeUp =>
@@ -99,6 +98,7 @@ class ProjectCreationMonitor(projectName: String,
       newOperationRec <- googleDAO.createProject(projectName, billingAccount)
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNewProject(projectName, newOperationRec) }
     } yield {
+      logger.info(s"Create request submitted for $projectName.")
       PollForStatus(CreatingProject)
     }
   }
@@ -110,6 +110,7 @@ class ProjectCreationMonitor(projectName: String,
           da.billingProjectQuery.updateStatus(projectName, EnablingServices),
           da.operationQuery.saveNewOperations(serviceOps)) }
     } yield {
+      logger.info(s"Asked Google to enable services for $projectName.")
       PollForStatus(EnablingServices)
     }
   }
@@ -145,6 +146,7 @@ class ProjectCreationMonitor(projectName: String,
         Fail(ops.filter(_.errorMessage.isDefined))
       } else if ( ops.forall(_.done) ){
         //all done!
+        logger.info(s"$projectName completed $status")
         getNextStatusMessage(status)
       } else {
         //not done yet; schedule next poll
