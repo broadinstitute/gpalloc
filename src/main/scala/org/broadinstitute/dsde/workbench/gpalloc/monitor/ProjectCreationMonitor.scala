@@ -3,14 +3,16 @@ package org.broadinstitute.dsde.workbench.gpalloc.monitor
 import java.io.{PrintWriter, StringWriter}
 
 import akka.actor.Status.Failure
-import akka.actor.{Actor, Cancellable, Props}
+import akka.actor.{Actor, Props}
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, DataAccess, DbReference}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationMonitor._
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import slick.dbio.DBIO
 
@@ -33,8 +35,8 @@ object ProjectCreationMonitor {
             billingAccount: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
-            pollInterval: FiniteDuration): Props = {
-    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, pollInterval))
+            gpAllocConfig: GPAllocConfig): Props = {
+    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig))
   }
 }
 
@@ -42,7 +44,7 @@ class ProjectCreationMonitor(projectName: String,
                              billingAccount: String,
                              dbRef: DbReference,
                              googleDAO: GoogleDAO,
-                             pollInterval: FiniteDuration)
+                             gpAllocConfig: GPAllocConfig)
   extends Actor
   with LazyLogging {
 
@@ -78,13 +80,13 @@ class ProjectCreationMonitor(projectName: String,
       stop(self)
   }
 
-  def scheduleNextPoll(status: BillingProjectStatus, pollTime: FiniteDuration = pollInterval): Unit = {
-    context.system.scheduler.scheduleOnce(pollInterval, self, PollForStatus(status))
+  def scheduleNextPoll(status: BillingProjectStatus, pollTime: FiniteDuration = gpAllocConfig.projectMonitorPollInterval): Unit = {
+    context.system.scheduler.scheduleOnce(pollTime, self, PollForStatus(status))
   }
 
   def resumeInflightProject: Future[ProjectCreationMonitorMessage] = {
     dbRef.inTransaction { da => da.billingProjectQuery.getBillingProject(projectName) } map {
-      case Some(bp) => ScheduleNextPoll(bp.status, FiniteDuration((Random.nextDouble() * pollInterval).toMillis, MILLISECONDS))
+      case Some(bp) => ScheduleNextPoll(bp.status, FiniteDuration((Random.nextDouble() * gpAllocConfig.projectMonitorPollInterval).toMillis, MILLISECONDS))
       case None => throw new WorkbenchException(s"ProjectCreationMonitor asked to find missing project $projectName")
     }
   }
@@ -94,6 +96,7 @@ class ProjectCreationMonitor(projectName: String,
       newOperationRec <- googleDAO.createProject(projectName, billingAccount)
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNewProject(projectName, newOperationRec) }
     } yield {
+      logger.info(s"Create request submitted for $projectName.")
       PollForStatus(CreatingProject)
     }
   }
@@ -105,6 +108,7 @@ class ProjectCreationMonitor(projectName: String,
           da.billingProjectQuery.updateStatus(projectName, EnablingServices),
           da.operationQuery.saveNewOperations(serviceOps)) }
     } yield {
+      logger.info(s"Asked Google to enable services for $projectName.")
       PollForStatus(EnablingServices)
     }
   }
@@ -140,10 +144,11 @@ class ProjectCreationMonitor(projectName: String,
         Fail(ops.filter(_.errorMessage.isDefined))
       } else if ( ops.forall(_.done) ){
         //all done!
+        logger.info(s"$projectName completed $status")
         getNextStatusMessage(status)
       } else {
         //not done yet; schedule next poll
-        ScheduleNextPoll(status, pollInterval)
+        ScheduleNextPoll(status, gpAllocConfig.projectMonitorPollInterval)
       }
     }
   }

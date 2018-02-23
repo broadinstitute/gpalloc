@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.dao
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 
 import scala.collection.mutable

@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.dao
 
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.AssignedProject
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 
 import scala.concurrent.Future
 

@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBilli
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -37,10 +38,8 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   import context._
 
-  //yes this is deprecated. no i'm not going to move to akka streams
-  //this is for GCP ratelimit, which is one CreateProject per second
-  val throttler = system.actorOf(Props(classOf[TimerBasedThrottler], gpAllocConfig.projectsPerSecondThrottle msgsPer 1.second))
-  throttler ! SetTarget(Some(self))
+  //Google throttles project creation requests to 1 a second.
+  val projectCreationThrottler = new Throttler(context, gpAllocConfig.projectsPerSecondThrottle, 1.second, "ProjectCreation")
 
   var gpAlloc: GPAllocService = _
 
@@ -77,7 +76,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   }
 
   def requestNewProject(projectName: String): Unit = {
-    throttler ! CreateProject(projectName)
+    projectCreationThrottler.throttle( () => Future.successful(createProject(projectName)) )
   }
 
   def createProject(projectName: String): Unit = {
@@ -87,7 +86,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   def createChildActor(projectName: String): ActorRef = {
     //use context.actorOf so we create children that will be killed if we get PoisonPilled
-    context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig.projectMonitorPollInterval), monitorName(projectName))
+    context.actorOf(ProjectCreationMonitor.props(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig), monitorName(projectName))
   }
 
   //TODO: hook this up. drop the database, optionally delete the projects

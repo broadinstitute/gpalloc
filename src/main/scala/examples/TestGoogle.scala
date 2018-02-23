@@ -10,9 +10,11 @@ import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
+import akka.contrib.throttle.Throttler.RateInt
 
 import scala.concurrent.{Await, ExecutionContext}
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 //this runs from within intellij.
@@ -34,7 +36,9 @@ object TestGoogle extends App {
       "gpalloc", //appName
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
-      gcsConfig.getString("billingEmail")) //billingEmail -- setServiceAccountUser
+      gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
+      1,
+      1 second)
 
     val projectName = "gpalloc-dev-develop-sywr9jt"
 

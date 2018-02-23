@@ -1,6 +1,9 @@
 package org.broadinstitute.dsde.workbench.gpalloc.db
 
+import akka.actor.{Actor, ActorContext, ActorSystem, Props}
+import akka.testkit.TestActorRef
 import org.broadinstitute.dsde.workbench.gpalloc.TestExecutionContext
+import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.scalatest.Matchers
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
@@ -30,5 +33,20 @@ trait TestComponent extends Matchers with ScalaFutures
     } finally {
       dbFutureValue { _ => DbSingleton.ref.dataAccess.truncateAll() }
     }
+  }
+
+  //Just give me an ActorContext to make Throttlers with.
+  def dummyActorContext(implicit actorSystem: ActorSystem): ActorContext = {
+
+    object DummyActor {
+      def props(): Props = Props(new DummyActor())
+    }
+    class DummyActor() extends Actor {
+      override def receive: Receive = {
+        case _ =>
+      }
+    }
+
+    TestActorRef[DummyActor](DummyActor.props()).underlyingActor.context
   }
 }
