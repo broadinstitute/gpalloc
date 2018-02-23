@@ -51,7 +51,7 @@ class ProjectCreationMonitor(projectName: String,
 
   import context._
 
-  val googleOpThrottler = new Throttler(system, gpAllocConfig.opsPerSecondThrottle msgsPer 1.second)
+  val googleOpThrottler = new Throttler(system, gpAllocConfig.opsPerSecondThrottle msgsPer 1.second, projectName)
 
   override def receive: PartialFunction[Any, Unit] = {
     case WakeUp =>
