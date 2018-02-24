@@ -19,6 +19,24 @@ The situation in FiaB-style auto-testing land is a little different in that work
 
 ## GPAlloc in FiaB auto-tests
 
-`workbenchServiceTest` now has support for GPAlloc. Mixing in `BillingFixtures` provides the loan-pattern method `withCleanBillingProject`. This supplies a GPAlloc'd project and handles the cleanup at the end for you. (If no GPAlloc'd projects are available, it falls back to creating a new one.)
+`workbench-service-test` now has support for GPAlloc as of `0.5-30b3ceb`.
+
+To use it, simply replace your calls to `withBillingProject` with the new method `withCleanBillingProject`. This does all the work to acquire and release GPAlloc'd projects for you and should take much less time doing so. (If no GPAlloc'd projects are available, it falls back to creating a new one the old way.)
+
+If this is your service's first usage of GPAlloc, you should also place this block inside the `fireCloud` stanza of your test's `application.conf.ctmpl`:
+
+```
+fireCloud {
+  //baseUrl, orchApiUrl et al are here already...
+  
+  {{if eq $environment "qa"}}
+  gpAllocApiUrl = "https://gpalloc-qa.dsp-techops.broadinstitute.org/api/"
+  {{else}}
+  gpAllocApiUrl = "https://gpalloc-dev.dsp-techops.broadinstitute.org/api/"
+  {{end}}
+}
+```
+
+See [Sam's testing conf](https://github.com/broadinstitute/firecloud-automated-testing/blob/master/configs/sam/application.conf.ctmpl#L31) for an example.
 
 Previous iterations of this document said a lot of confusing things about super-Suites and such. This is no longer the case: `withCleanBillingProject` can now properly clean up after itself (thanks Matt B!).
