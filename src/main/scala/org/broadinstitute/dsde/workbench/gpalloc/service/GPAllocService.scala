@@ -6,6 +6,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference}
+import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RegisterGPAllocService, RequestNewProject}
 import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail}
@@ -80,6 +81,12 @@ class GPAllocService(protected val dbRef: DbReference,
   def dumpState(): Future[Seq[BillingProjectRecord]] = {
     dbRef.inTransaction { da =>
       da.billingProjectQuery.listEverything()
+    }
+  }
+
+  def dumpStats(): Future[Map[BillingProjectStatus, Int]] = {
+    dbRef.inTransaction { da =>
+      da.billingProjectQuery.statusStats()
     }
   }
 

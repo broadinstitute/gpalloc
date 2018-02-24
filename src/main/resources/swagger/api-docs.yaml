@@ -106,10 +106,32 @@ paths:
           schema:
             $ref: '#/definitions/BillingProjectRecord'
         '500':
-          description: Project could not be released
+          description: Internal server error
           schema:
             $ref: '#/definitions/ErrorReport'
       operationId: adminDumpEverything
+      tags:
+        - admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  '/api/admin/stats':
+    get:
+      summary: Dump summary of projects
+      responses:
+        '200':
+          description: Everything's cool
+          schema:
+            type: object
+            description: Map[String,Int]
+        '500':
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: adminStats
       tags:
         - admin
       security:
