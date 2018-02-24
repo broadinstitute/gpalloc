@@ -86,6 +86,12 @@ trait BillingProjectComponent extends GPAllocComponent {
       findBillingProject(billingProject).map(bp => bp.status).update(status.toString).map{ _ => ()}
     }
 
+    def statusStats(): DBIO[Map[BillingProjectStatus, Int]] = {
+      billingProjectQuery.groupBy( _.status ).map { case (status, recs) => (status, recs.length) }.result map { recs =>
+        recs.map{ case (status, count) => BillingProjectStatus.withNameIgnoreCase(status) -> count }.toMap
+      }
+    }
+
     def assignProjectFromPool(owner: String): DBIO[Option[String]] = {
       val freeBillingProject = billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).take(1).forUpdate
       freeBillingProject.result flatMap { bps: Seq[BillingProjectRecord] =>

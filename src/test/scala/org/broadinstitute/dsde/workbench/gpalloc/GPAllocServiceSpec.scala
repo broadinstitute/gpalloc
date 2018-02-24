@@ -187,4 +187,14 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     //shoulda scrubbed google
     mockGoogleDAO.scrubbedProjects should contain theSameElementsAs Set(newProjectName)
   }
+
+  it should "return statistics" in isolatedDbTest {
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Assigned) } shouldEqual newProjectName2
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
+
+    val (gpAlloc, _, _) = gpAllocService(dbRef, 1)
+    val stats = gpAlloc.dumpStats().futureValue
+    stats shouldEqual Map(BillingProjectStatus.Unassigned -> 1, BillingProjectStatus.Assigned -> 2)
+  }
 }

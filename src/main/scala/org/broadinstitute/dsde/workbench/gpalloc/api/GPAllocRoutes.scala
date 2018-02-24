@@ -69,6 +69,16 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService, val swaggerConf
               }
             }
           }
+        } ~
+        path("admin" / "stats") {
+          get {
+            complete {
+              gpAllocService.dumpStats().map { stats =>
+                StatusCodes.OK -> stats
+              }
+            }
+          }
+
         }
       }
     }

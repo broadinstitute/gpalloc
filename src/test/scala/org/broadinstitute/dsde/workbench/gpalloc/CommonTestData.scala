@@ -57,6 +57,7 @@ trait CommonTestData {
   val testBillingAccount = "test-billing-account"
   val newProjectName = "new-test-project"
   val newProjectName2 = "new-test-project2"
+  val newProjectName3 = "new-test-project3"
   val requestingUser = "user@example.com"
   val badUser = "evil@villainy.com"
   val whenever = Some(Timestamp.from(Instant.now()))
