@@ -13,6 +13,7 @@ app:
     - /app/billing-account.pem:/etc/billing-account.pem
   links:
     - mysql:mysql
+  restart: always
 
 mysql:
   image: mysql:5.7.15
