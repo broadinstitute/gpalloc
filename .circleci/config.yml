@@ -65,11 +65,11 @@ workflows:
               only:
                 - master
                 - develop
-      - deploy:
-          requires:
-            - docker-build
-          filters:
-            branches:
-              only:
-                - master
-                - develop
+#      - deploy:
+#          requires:
+#            - docker-build
+#          filters:
+#            branches:
+#              only:
+#                - master
+#                - develop
