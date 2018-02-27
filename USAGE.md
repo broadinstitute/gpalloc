@@ -14,12 +14,14 @@ You can give this info to the [project registration endpoint](https://rawls.dsde
 When you're finished with your project, call `DELETE /api/googleproject/<projectName>` to return it to the pool.
 
 If you don't return it to the pool within two hours, GPAlloc will assume you forgot to clean up after yourself and do it for you.
+
+Note that GPAlloc's proxy only accepts users with email addresses ending in `@test.firecloud.org` or `@quality.firecloud.org`. Anyone else will be turned away.
  
 The situation in FiaB-style auto-testing land is a little different in that workbench-libs does some of this for you. So let's talk about that.
 
 ## GPAlloc in FiaB auto-tests
 
-`workbench-service-test` now has support for GPAlloc as of `0.5-30b3ceb`.
+`workbench-service-test` now has support for GPAlloc as of [v0.5](https://github.com/broadinstitute/workbench-libs/blob/develop/serviceTest/CHANGELOG.md#05) (link goes to changelog where you can get the hash).
 
 To use it, simply replace your calls to `withBillingProject` with the new method `withCleanBillingProject`. This does all the work to acquire and release GPAlloc'd projects for you and should take much less time doing so. (If no GPAlloc'd projects are available, it falls back to creating a new one the old way.)
 
