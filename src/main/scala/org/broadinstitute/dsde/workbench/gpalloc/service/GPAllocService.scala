@@ -50,6 +50,7 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   def releaseGoogleProject(userEmail: WorkbenchEmail, project: String, becauseAbandoned: Boolean = false): Future[Unit] = {
+    logger.info(s"got release request from ${userEmail.value} of $project")
     val authCheck = dbRef.inTransaction { da =>
       da.billingProjectQuery.getAssignedBillingProject(project) map {
         case Some(bp) =>
@@ -66,11 +67,15 @@ class GPAllocService(protected val dbRef: DbReference,
         //nuke the billing project if no auth failures.
         //onComplete will return the original future, i.e. authCheck, and not wait for onComplete to complete.
         //we're kicking off this work but not monitoring it.
-        for {
+        val scrub = for {
           _ <- googleBillingDAO.scrubBillingProject(project)
           _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
         } yield {
-          logger.info(s"released ${if(becauseAbandoned) "abandoned" else ""} project $project")
+          logger.info(s"successfully released ${if(becauseAbandoned) "abandoned " else ""}project $project")
+        }
+        scrub.onComplete {
+          case Failure(e) => logger.error(s"releaseGoogleProject failed for $project because $e")
+          case Success(_) => //meh
         }
       case Failure(e) =>
         logger.error(s"failed to release $project because $e")
