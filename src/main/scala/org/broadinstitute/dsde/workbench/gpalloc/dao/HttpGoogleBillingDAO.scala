@@ -141,16 +141,26 @@ class HttpGoogleBillingDAO(appName: String,
     // there is not much else to be done... too bad scala does not have duck typing.
     operation.operationType match {
       case CreatingProject =>
-        opThrottler.throttle(() => retryWhen500orGoogleError(() => {
+        opThrottler.throttle(() => retryWithRecoverWhen500orGoogleError(() => {
           executeGoogleRequest(cloudResources.operations().get(operation.operationId))
-        })).map { op =>
+        }) {
+          case t: HttpResponseException if t.getStatusCode == 429 =>
+            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
+            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
+            new CRMOperation().setDone(false).setError(null)
+        }).map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
 
       case EnablingServices =>
-        opThrottler.throttle(() => retryWhen500orGoogleError(() => {
+        opThrottler.throttle(() => retryWithRecoverWhen500orGoogleError(() => {
           executeGoogleRequest(servicesManager.operations().get(operation.operationId))
-        })).map { op =>
+        }) {
+          case t: HttpResponseException if t.getStatusCode == 429 =>
+            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
+            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
+            new SMOperation().setDone(false).setError(null)
+        }).map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
     }
