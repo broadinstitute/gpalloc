@@ -345,13 +345,17 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
+  def googNull[T](list: java.util.List[T]): Seq[T] = {
+    Option(list).map(_.asScala).getOrElse(Seq())
+  }
+
   //dear god, google. surely there's a better way
   def gProjectPath(project: String) = s"projects/$project"
 
   def cleanupPetSAKeys(projectName: String): Future[Unit] = {
     for {
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
-      pets = serviceAccounts.getAccounts.asScala.filter(_.getEmail.startsWith("pet-"))
+      pets = googNull(serviceAccounts.getAccounts).filter(_.getEmail.startsWith("pet-"))
       _ <- removeKeysForPets(projectName, pets)
     } yield {
       //nah
@@ -362,7 +366,7 @@ class HttpGoogleBillingDAO(appName: String,
     sequentially(pets){ pet =>
       for {
         petKeys <- googleRq(iam.projects.serviceAccounts.keys.list(pet.getName).setKeyTypes(List("USER_MANAGED").asJava))
-        _ <- removeKeysForPet(projectName, pet.getEmail, petKeys.getKeys.asScala)
+        _ <- removeKeysForPet(projectName, pet.getEmail, googNull(petKeys.getKeys))
       } yield {
         //nah
       }
