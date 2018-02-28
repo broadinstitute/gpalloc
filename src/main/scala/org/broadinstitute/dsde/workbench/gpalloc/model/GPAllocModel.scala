@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.gpalloc.model
 
 import java.sql.Timestamp
+import java.text.SimpleDateFormat
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.broadinstitute.dsde.workbench.gpalloc.db.BillingProjectRecord
@@ -41,12 +42,15 @@ object GPAllocJsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   }
 
   implicit object TimestampFormat extends JsonFormat[Timestamp] {
-    def write(obj: Timestamp) = JsNumber(obj.getTime)
+    def write(obj: Timestamp) = {
+      val dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss:SSS z")
+      JsString(dateFormat.format(obj))
+    }
+
 
     def read(json: JsValue) = json match {
       case JsNumber(time) => new Timestamp(time.toLong)
-
-      case _ => throw new DeserializationException("Date expected")
+      case _ => throw new DeserializationException("Date input as millis only please")
     }
   }
 
