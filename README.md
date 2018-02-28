@@ -26,8 +26,6 @@ The two "production" instances of GPAlloc are:
 * Creates projects in the @quality.firecloud.org domain
 * Used by tests run against FiaBs created in the broad-dsde-qa project (i.e. auto-triggered test runs)
 
-These instances are deployed to at the same time.
-
 #### For GPAlloc developers
 
 https://gpalloc-beta.dsp-techops.broadinstitute.org/ is the "developer" instance. At any given point in time it probably has recent-ish code on it, but you should ssh to the host and run `sudo docker ps` to find out.
@@ -42,7 +40,16 @@ To deploy the `develop` Docker image to the `-beta` instance, select `image=deve
 
 To deploy the `master` Docker image to the `-dev` and `-qa` instances, select `image=master`.
 
-The `-beta` instance can be used to test WIP code. Please synchronize with the #gpalloc channel on Broad's Slack before doing this. Then do the following:
+The `-beta` instance can be used to test WIP code. Please synchronize with the #gpalloc channel on Broad's Slack before doing this.
+
+Note that the git branch name is used in the created project names, so  
+
+a) don't make it too long  
+b) **don't put an underscore in it**.  
+
+Otherwise Google won't let you create the project (name too long or contains invalid characters).
+
+To deploy something custom to `-beta`, do the following:
 
 1. Manually build and push your branch of gpalloc to DockerHub:  
 ```
@@ -50,10 +57,6 @@ local $ ./docker/build.sh jar
 local $ ./docker/build.sh -d build
 local $ ./docker/build.sh -d push
 ```  
-Note that the git branch name is used in the created project names, so  
-a) don't make it too long  
-b) **don't put an underscore in it**.  
-Otherwise Google won't let you create the project (name too long or contains invalid characters).
 2. SSH into the machine.
 3. Edit `/app/docker-compose.yaml` to point to your new Docker image.
 4. Restart the Docker:
