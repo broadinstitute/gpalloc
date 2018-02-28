@@ -8,6 +8,7 @@ app:
   environment:
     MYSQL_HOST: mysql
     JAVA_OPTS: -Dconfig.file=/etc/gpalloc.conf
+    TZ: America/New_York
   volumes:
     - /app/gpalloc.conf:/etc/gpalloc.conf
     - /app/billing-account.pem:/etc/billing-account.pem
