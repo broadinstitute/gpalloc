@@ -126,7 +126,7 @@ class HttpGoogleBillingDAO(appName: String,
   override def scrubBillingProject(projectName: String): Future[Unit] = {
     for {
       _ <- cleanupPolicyBindings(projectName)
-      _ <- cleanupPetSAKeys(projectName)
+      _ <- cleanupPets(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
     } yield {
       //nah
@@ -352,35 +352,14 @@ class HttpGoogleBillingDAO(appName: String,
   //dear god, google. surely there's a better way
   def gProjectPath(project: String) = s"projects/$project"
 
-  def cleanupPetSAKeys(projectName: String): Future[Unit] = {
+  def cleanupPets(projectName: String): Future[Unit] = {
     for {
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
       pets = googNull(serviceAccounts.getAccounts).filter(_.getEmail.startsWith("pet-"))
-      _ <- removeKeysForPets(projectName, pets)
+      _ <- sequentially(pets) { pet => googleRq( iam.projects.serviceAccounts.delete(pet.getName) ) }
     } yield {
       //nah
     }
-  }
-
-  def removeKeysForPets(projectName: String, pets: Seq[ServiceAccount]): Future[Unit] = {
-    sequentially(pets){ pet =>
-      for {
-        petKeys <- googleRq(iam.projects.serviceAccounts.keys.list(pet.getName).setKeyTypes(List("USER_MANAGED").asJava))
-        _ <- removeKeysForPet(projectName, pet.getEmail, googNull(petKeys.getKeys))
-      } yield {
-        //nah
-      }
-    }.map(_ => ())
-  }
-
-  def removeKeysForPet(projectName: String, petEmail: String, petKeys: Seq[ServiceAccountKey]): Future[Unit] = {
-    sequentially(petKeys){ petKey =>
-      for {
-        _ <- googleRq(iam.projects.serviceAccounts.keys.delete(petKey.getName))
-      } yield {
-        //nah
-      }
-    }.map(_ => ())
   }
 
   def createStorageLogsBucket(billingProjectName: String): Future[String] = {
