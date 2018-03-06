@@ -42,3 +42,20 @@ fireCloud {
 See [Sam's testing conf](https://github.com/broadinstitute/firecloud-automated-testing/blob/master/configs/sam/application.conf.ctmpl#L31) for an example.
 
 Previous iterations of this document said a lot of confusing things about super-Suites and such. This is no longer the case: `withCleanBillingProject` can now properly clean up after itself (thanks Matt B!).
+
+## Running auto-tests locally using GPAlloc
+
+You may get the following error in your logs:
+
+```
+13:03:58.057 [default-akka.actor.default-dispatcher-6] INFO  o.b.dsde.workbench.service.GPAlloc$ - retry-able operation failed: 3 retries remaining, retrying in 100 milliseconds
+javax.net.ssl.SSLProtocolException: handshake alert:  unrecognized_name
+    at sun.security.ssl.ClientHandshaker.handshakeAlert(ClientHandshaker.java:1446) ~[na:1.8.0_131]
+    at sun.security.ssl.SSLEngineImpl.recvAlert(SSLEngineImpl.java:1791) ~[na:1.8.0_131]
+```
+
+This is [Java being jumpy about SSL](https://www.ibm.com/support/knowledgecenter/en/SSYKE2_8.0.0/com.ibm.java.security.component.80.doc/security-component/jsse2Docs/sni_extension.html); we turn it off in our apps but you're likely missing that flag in your `SBT_OPTS`. You can update it like this:
+
+```
+export SBT_OPTS="$SBT_OPTS -Djsse.enableSNIExtension=false -Dheadless=false"
+```
