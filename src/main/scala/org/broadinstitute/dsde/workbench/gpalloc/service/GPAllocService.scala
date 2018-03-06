@@ -4,8 +4,8 @@ import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
-import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
-import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference}
+import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO}
+import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference, RacyProjectsException}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RegisterGPAllocService, RequestNewProject}
@@ -38,7 +38,7 @@ class GPAllocService(protected val dbRef: DbReference,
   maybeCreateNewProjects()
 
   def requestGoogleProject(userInfo: UserInfo): Future[AssignedProject] = {
-    val newProject = dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) } flatMap {
+    val newProject = assignProjectFromPool(userInfo.userEmail) flatMap {
       case Some(projectName) =>
         val xferFuture = googleBillingDAO.transferProjectOwnership(projectName, userInfo.userEmail.value)
         logger.info(s"assigned project $projectName to ${userInfo.userEmail.value}")
@@ -47,6 +47,17 @@ class GPAllocService(protected val dbRef: DbReference,
     }
     newProject onComplete { _ => maybeCreateNewProjects() }
     newProject
+  }
+
+  //assigns a project from the pool
+  protected def assignProjectFromPool(userEmail: WorkbenchEmail): Future[Option[String]] = {
+    dbRef.inTransaction {
+      dataAccess => dataAccess.billingProjectQuery.assignProjectFromPool(userEmail.value)
+    } recoverWith {
+      //it's possible that access to the database will race and another project will steal the bp intended for us
+      //in this case, retrying should fix the problem. like good functional programmers, we achieve this using recursion
+      case RacyProjectsException => assignProjectFromPool(userEmail)
+    }
   }
 
   def releaseGoogleProject(userEmail: WorkbenchEmail, project: String, becauseAbandoned: Boolean = false): Future[Unit] = {

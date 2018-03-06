@@ -38,6 +38,9 @@ object BillingProjectRecord {
   }
 }
 
+//Exception to indicate that project assignment was racy and failed
+case object RacyProjectsException extends RuntimeException
+
 trait BillingProjectComponent extends GPAllocComponent {
   this: ActiveOperationComponent =>
 
@@ -92,14 +95,35 @@ trait BillingProjectComponent extends GPAllocComponent {
       }
     }
 
+    /**
+      * NOTE: This may throw RacyProjectsException if two threads attempt to acquire the same project at the same time
+      * In this case one of them will win and the other will throw. You, the caller, should handle RacyProjectsException.
+      */
     def assignProjectFromPool(owner: String): DBIO[Option[String]] = {
+      //query for a billing project that's free
       val freeBillingProject = billingProjectQuery.filter(_.status === BillingProjectStatus.Unassigned.toString).take(1).forUpdate
+
+      //update it to be assigned to this owner
       freeBillingProject.result flatMap { bps: Seq[BillingProjectRecord] =>
         bps.headOption match {
           case Some(bp) =>
-            findBillingProject(bp.billingProjectName)
+            //attempt to do the update, but only update the record if its status is Unassigned
+            //this prevent racing if two calls to this function happen at the same time and return the same billing project
+            //in theory, the forUpdate in the first line of this function should handle it, but in practice, it doesn't seem to :(
+            val update = findBillingProject(bp.billingProjectName)
+              .filter(b => b.status === BillingProjectStatus.Unassigned.toString)
               .map(b => (b.owner, b.status, b.lastAssignedTime))
-              .update(Some(owner), BillingProjectStatus.Assigned.toString, BillingProjectRecord.tsToDB(Instant.now())) map { _ => Some(bp.billingProjectName) }
+              .update(Some(owner), BillingProjectStatus.Assigned.toString, BillingProjectRecord.tsToDB(Instant.now()))
+
+            //count the number of rows we updated
+            update flatMap {
+              case 0 =>
+                //if we updated 0 rows, someone else stole the billing project from under our feet
+                //throw an exception and let the caller handle it
+                DBIO.failed(RacyProjectsException)
+              case 1 =>
+                DBIO.successful(Some(bp.billingProjectName))
+            }
           case None => DBIO.successful(None)
         }
       }

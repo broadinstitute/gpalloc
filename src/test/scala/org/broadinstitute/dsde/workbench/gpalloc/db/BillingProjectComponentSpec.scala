@@ -4,9 +4,12 @@ import org.broadinstitute.dsde.workbench.gpalloc.CommonTestData
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.scalatest.FlatSpecLike
 import org.scalatest.concurrent.ScalaFutures
-import scala.concurrent.duration._
 
-class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with CommonTestData {
+import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.util.{Failure, Success, Try}
+
+class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with CommonTestData with ScalaFutures {
   import profile.api._
   import CommonTestData.BillingProjectRecordEquality._
 
@@ -98,5 +101,39 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     dbFutureValue { _.billingProjectQuery.getAbandonedProjects(30 minutes) } should contain theSameElementsAs Seq(
       assignedBillingProjectRecord(newProjectName, userInfo.userEmail, 1 hour)
     )
+  }
+
+  def futureToFutureTry[T](f: Future[T]): Future[Try[T]] = {
+    f.map(Success(_)).recover { case z => Failure(z) }
+  }
+
+  it should "handle being too racy" in isolatedDbTest {
+    //add 50 projects
+    (1 to 50) foreach { n =>
+      dbFutureValue { _.billingProjectQuery.saveNew(s"$newProjectName-$n", BillingProjectStatus.Unassigned) }
+    }
+
+    //make 50 parallel requests to assign them
+    //hopefully this should force a race condition
+    val assignedProjectFs = (1 to 50) map { n =>
+      DbSingleton.ref.inTransaction { _.billingProjectQuery.assignProjectFromPool(s"foo-$n@bar.baz") }
+    } map futureToFutureTry
+
+    //AFTER the futures have been started, wait for them
+    val assignedProjects = assignedProjectFs map { f => f.futureValue }
+
+    //partition out the successes and the fails
+    val (successes, fails) = assignedProjects.partition( t => t.isSuccess )
+
+    //if assignProjectFromPool is misbehaving, then it will return the same project at least twice
+    //if the set of project names (sans duplicates) is the same length as the list, then there were no duplicates
+    successes.map(_.get).toSet.size shouldEqual successes.size
+
+    //any failures should be RacyProject exceptions, which the caller can handle
+    fails.forall( f => f.isFailure && f == Failure(RacyProjectsException)) shouldBe true
+
+    //HE note: at the time of test writing, running this test printed 26 below
+    //thus proving that this code does (at least running locally on my machine!) force a real race condition
+    //println(fails.length)
   }
 }
