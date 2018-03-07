@@ -125,7 +125,8 @@ class HttpGoogleBillingDAO(appName: String,
 
   override def scrubBillingProject(projectName: String): Future[Unit] = {
     for {
-      _ <- cleanupPolicyBindings(projectName)
+      googleProject <- getGoogleProject(projectName)
+      _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupPets(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
     } yield {
@@ -287,11 +288,22 @@ class HttpGoogleBillingDAO(appName: String,
       }) { case t: HttpResponseException if t.getStatusCode == 409 => bucketName }
   }
 
-  private def shouldDelete(entityName: String): Boolean = {
-    !(entityName.startsWith("project-owners-") || entityName.startsWith("project-editors-"))
+  private def leaveThisIAMPolicy(entityName: String, projectNumber: Long): Boolean = {
+    if(entityName.startsWith("serviceAccount:")) {
+      /* of course, Google's pre-generated SAs aren't consistently named:
+       *   projectNumber-compute@developer.gserviceaccount.com
+       *   projectNumber@cloudservices.gserviceaccount.com
+       *   service-projectNumber@containerregistry.iam.gserviceaccount.com
+       * so we'll just leave SAs that contain the project number.
+       */
+      entityName.split("@").head.contains(s"$projectNumber")
+    } else {
+      //the only other acceptable user is billing@thisdomain.firecloud.org
+      entityName == s"user:$billingEmail"
+    }
   }
 
-  def cleanupPolicyBindings(projectName: String): Future[Unit] = {
+  def cleanupPolicyBindings(projectName: String, projectNumber: Long): Future[Unit] = {
     for {
       existingPolicy <- opThrottler.throttle( () => retryWhen500orGoogleError(() => {
         executeGoogleRequest(cloudResources.projects().getIamPolicy(projectName, null))
@@ -301,7 +313,7 @@ class HttpGoogleBillingDAO(appName: String,
         val existingPolicies: Map[String, Seq[String]] = existingPolicy.getBindings.asScala.map { policy => policy.getRole -> policy.getMembers.asScala }.toMap
 
         val updatedPolicies = existingPolicies.map { case (role, members) =>
-          (role, members.filterNot(_.startsWith("group:policy-")))
+          (role, members.filter(entityName => leaveThisIAMPolicy(entityName, projectNumber)))
         }.collect {
           case (role, members) if members.nonEmpty =>
             new Binding().setRole(role).setMembers(members.distinct.asJava)
@@ -329,16 +341,20 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
+  private def shouldDeleteBucketACL(entityName: String): Boolean = {
+    !(entityName.startsWith("project-owners-") || entityName.startsWith("project-editors-"))
+  }
+
   //removes all acls added to the cromwell auth bucket that aren't the project owner/editor ones
   def cleanupCromwellAuthBucket(billingProjectName: String): Future[Unit] = {
     val bucketName = cromwellAuthBucketName(billingProjectName)
     for {
       oAcls <- googleRq( storage.defaultObjectAccessControls.list(bucketName) )
-      deleteOAcls = oAcls.getItems.asScala.filter(a => shouldDelete(a.getEntity))
+      deleteOAcls = oAcls.getItems.asScala.filter(a => shouldDeleteBucketACL(a.getEntity))
       _ <- sequentially(deleteOAcls) { d => googleRq(storage.defaultObjectAccessControls.delete(bucketName, d.getEntity)) }
 
       bAcls <- googleRq( storage.bucketAccessControls.list(bucketName) )
-      deleteBAcls = bAcls.getItems.asScala.filter(a => shouldDelete(a.getEntity))
+      deleteBAcls = bAcls.getItems.asScala.filter(a => shouldDeleteBucketACL(a.getEntity))
       _ <- sequentially(deleteBAcls) { d => googleRq(storage.bucketAccessControls.delete(bucketName, d.getEntity)) }
     } yield {
       //nah
