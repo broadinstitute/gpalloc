@@ -203,11 +203,11 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
 
-    val (gpAlloc, _, _) = gpAllocService(dbRef, 1)
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 1)
     gpAlloc.forceCleanupAll().futureValue
 
     eventually {
-      //mockGoogle.scrubbed == 1 and 2
+      mockGoogleDAO.scrubbedProjects shouldBe Set(newProjectName, newProjectName2)
     }
   }
 }
