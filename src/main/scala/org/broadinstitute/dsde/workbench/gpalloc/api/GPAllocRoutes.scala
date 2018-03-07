@@ -61,25 +61,36 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService, val swaggerConf
             }
           }
         } ~
-        path("admin" / "dump") {
-          get {
-            complete {
-              gpAllocService.dumpState().map { state =>
-                StatusCodes.OK -> state
+        pathPrefix("admin") {
+          path("dump") {
+            get {
+              complete {
+                gpAllocService.dumpState().map { state =>
+                  StatusCodes.OK -> state
+                }
+              }
+            }
+          } ~
+          path("stats") {
+            get {
+              complete {
+                gpAllocService.dumpStats().map { stats =>
+                  StatusCodes.OK -> stats
+                }
+              }
+            }
+          } ~
+          path("forceCleanupAll") {
+            delete {
+              complete {
+                gpAllocService.forceCleanupAll().map { _ =>
+                  StatusCodes.Accepted
+                }
               }
             }
           }
-        } ~
-        path("admin" / "stats") {
-          get {
-            complete {
-              gpAllocService.dumpStats().map { stats =>
-                StatusCodes.OK -> stats
-              }
-            }
-          }
-
         }
+
       }
     }
 

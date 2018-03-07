@@ -197,4 +197,17 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     val stats = gpAlloc.dumpStats().futureValue
     stats shouldEqual Map(BillingProjectStatus.Unassigned -> 1, BillingProjectStatus.Assigned -> 2)
   }
+
+  it should "force cleanup of all unassigned projects" in isolatedDbTest {
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
+
+    val (gpAlloc, _, _) = gpAllocService(dbRef, 1)
+    gpAlloc.forceCleanupAll().futureValue
+
+    eventually {
+      //mockGoogle.scrubbed == 1 and 2
+    }
+  }
 }
