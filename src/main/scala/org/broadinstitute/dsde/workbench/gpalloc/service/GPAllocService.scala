@@ -116,13 +116,20 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   def forceCleanup(project: String): Future[Unit] = {
-    for {
+    logger.info(s"attempting forceCleanup of $project")
+    val cleanup = for {
       //the below future will fail if the project is already assigned to someone else.
       //that's okay -- we don't want to clean it up in that case.
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.maybeRacyAssignProjectToOwner("gpalloc@cleaning.up", project) }
       _ <- googleBillingDAO.scrubBillingProject(project)
       _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
     } yield ()
+    cleanup.onComplete {
+      case Failure(RacyProjectsException) => logger.info(s"forceCleanup of $project because someone owns it")
+      case Failure(e) => logger.error(s"surprise error forcing cleanup of $project because $e")
+      case Success(_) => //meh
+    }
+    cleanup
   }
 
   def forceCleanupAll(): Future[Unit] = {
