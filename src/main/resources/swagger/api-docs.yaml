@@ -82,10 +82,10 @@ paths:
           required: true
           type: string
       responses:
-        '200':
-          description: Project released successfully
+        '202':
+          description: Accepted, will do it async
         '500':
-          description: Project could not be released
+          description: Badness happened
           schema:
             $ref: '#/definitions/ErrorReport'
       operationId: releaseGoogleProject
@@ -132,6 +132,25 @@ paths:
           schema:
             $ref: '#/definitions/ErrorReport'
       operationId: adminStats
+      tags:
+        - admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  '/api/admin/forceCleanupAll':
+    delete:
+      summary: Force cleanup of all unassigned projects
+      responses:
+        '202':
+          description: Accepted, will do it async
+        '500':
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: adminForceCleanupAll
       tags:
         - admin
       security:

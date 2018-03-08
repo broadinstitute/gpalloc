@@ -115,6 +115,25 @@ class GPAllocService(protected val dbRef: DbReference,
     }
   }
 
+  def forceCleanup(project: String): Future[Unit] = {
+    for {
+      //the below future will fail if the project is already assigned to someone else.
+      //that's okay -- we don't want to clean it up in that case.
+      _ <- dbRef.inTransaction { da => da.billingProjectQuery.maybeRacyAssignProjectToOwner("gpalloc@cleaning.up", project) }
+      _ <- googleBillingDAO.scrubBillingProject(project)
+      _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
+    } yield ()
+  }
+
+  def forceCleanupAll(): Future[Unit] = {
+    for {
+      projects <- dbRef.inTransaction { da => da.billingProjectQuery.getUnassignedProjects }
+      _ <- Future.traverse(projects) { project => forceCleanup(project.billingProjectName) }
+    } yield ()
+    //run the above future in the background because it's gonna take a while
+    Future.successful(())
+  }
+
   //create new google project if we don't have any available
   private def maybeCreateNewProjects(): Unit = {
     dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map {
