@@ -127,7 +127,7 @@ class GPAllocService(protected val dbRef: DbReference,
     cleanup.onComplete {
       case Failure(RacyProjectsException) => logger.info(s"forceCleanup of $project because someone owns it")
       case Failure(e) => logger.error(s"surprise error forcing cleanup of $project because $e")
-      case Success(_) => //meh
+      case Success(_) => logger.info(s"successful forceCleanup of $project")
     }
     cleanup
   }
