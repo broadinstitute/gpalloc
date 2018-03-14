@@ -58,6 +58,7 @@ object Dependencies {
 
   val googleBilling: ModuleID = "com.google.apis" % "google-api-services-cloudbilling" % "v1-rev16-1.23.0" excludeAll(excludeGuavaJDK5)
   val googleRpc: ModuleID =               "io.grpc" % "grpc-core" % "1.5.0"
+  val googleServiceUsage: ModuleID = "com.google.apis" % "google-api-services-serviceusage" % "v1beta1-rev8-1.23.0"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -93,6 +94,7 @@ object Dependencies {
 
     googleBilling,
     googleRpc,
+    googleServiceUsage,
 
     slick,
     hikariCP,

@@ -3,36 +3,32 @@ package org.broadinstitute.dsde.workbench.gpalloc.dao
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.googleapis.auth.oauth2.{GoogleClientSecrets, GoogleCredential}
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
 import com.google.api.client.http.HttpResponseException
 import com.google.api.client.json.jackson2.JacksonFactory
-import com.google.api.services.admin.directory.DirectoryScopes
 import com.google.api.services.cloudbilling.Cloudbilling
 import com.google.api.services.cloudbilling.model.ProjectBillingInfo
 import com.google.api.services.cloudresourcemanager.CloudResourceManager
 import com.google.api.services.cloudresourcemanager.model.{Binding, Project, SetIamPolicyRequest, Operation => CRMOperation}
 import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
-import com.google.api.services.genomics.GenomicsScopes
 import com.google.api.services.iam.v1.Iam
-import com.google.api.services.iam.v1.model.{ServiceAccount, ServiceAccountKey}
-import com.google.api.services.plus.PlusScopes
-import com.google.api.services.servicemanagement.ServiceManagement
-import com.google.api.services.servicemanagement.model.{EnableServiceRequest, Operation => SMOperation}
+import com.google.api.services.serviceusage.v1beta1.ServiceUsage
+import com.google.api.services.serviceusage.v1beta1.model.{BatchEnableServicesRequest, Operation => SUOperation}
 import com.google.api.services.storage.model.Bucket.Lifecycle
 import com.google.api.services.storage.model.Bucket.Lifecycle.Rule.{Action, Condition}
 import com.google.api.services.storage.model.{Bucket, BucketAccessControl, ObjectAccessControl}
-import com.google.api.services.storage.{Storage, StorageScopes}
+import com.google.api.services.storage.Storage
 import io.grpc.Status.Code
 import org.broadinstitute.dsde.workbench.google.GoogleUtilities
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
-import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus, GPAllocException}
+import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
-import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService}
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.metrics.GoogleInstrumentedService
+import org.broadinstitute.dsde.workbench.model.ErrorReportSource
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
@@ -88,8 +84,8 @@ class HttpGoogleBillingDAO(appName: String,
     new CloudResourceManager.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
-  def servicesManager: ServiceManagement = {
-    new ServiceManagement.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
+  def serviceUsage: ServiceUsage = {
+    new ServiceUsage.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
   def computeManager: Compute = {
@@ -138,7 +134,7 @@ class HttpGoogleBillingDAO(appName: String,
   override def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
 
     // this code is a colossal DRY violation but because the operations collection is different
-    // for cloudResManager and servicesManager and they return different but identical Status objects
+    // for cloudResManager and serviceUsage and they return different but identical Status objects
     // there is not much else to be done... too bad scala does not have duck typing.
     operation.operationType match {
       case CreatingProject =>
@@ -155,12 +151,12 @@ class HttpGoogleBillingDAO(appName: String,
 
       case EnablingServices =>
         opThrottler.throttle(() => retryWithRecoverWhen500orGoogleError(() => {
-          executeGoogleRequest(servicesManager.operations().get(operation.operationId))
+          executeGoogleRequest(serviceUsage.operations().get(operation.operationId))
         }) {
           case t: HttpResponseException if t.getStatusCode == 429 =>
             //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
             logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
-            new SMOperation().setDone(false).setError(null)
+            new SUOperation().setDone(false).setError(null)
         }).map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
@@ -199,18 +195,16 @@ class HttpGoogleBillingDAO(appName: String,
 
   // part 2
   override def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
-
     val billingManager = billing
-    val serviceManager = servicesManager
 
     val projectResourceName = s"projects/$projectName"
     val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component")
 
-    def enableGoogleService(service: String) = {
+    def batchEnableGoogleServices = {
       retryWhen500orGoogleError(() => {
-        executeGoogleRequest(serviceManager.services().enable(service, new EnableServiceRequest().setConsumerId(s"project:${projectName}")))
+        executeGoogleRequest(serviceUsage.services.batchEnable(projectResourceName, new BatchEnableServicesRequest().setServiceIds(services.asJava)))
       }) map { googleOperation =>
-        ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+        Seq(ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode))))
       }
     }
 
@@ -222,7 +216,7 @@ class HttpGoogleBillingDAO(appName: String,
       }))
 
       // enable appropriate google apis
-      operations <- opThrottler.sequence(services.map { service => { () => enableGoogleService(service) } })
+      operations <- opThrottler.throttle(() => batchEnableGoogleServices)
 
     } yield {
       operations
