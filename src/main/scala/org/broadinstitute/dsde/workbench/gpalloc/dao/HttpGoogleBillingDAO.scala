@@ -198,7 +198,31 @@ class HttpGoogleBillingDAO(appName: String,
     val billingManager = billing
 
     val projectResourceName = s"projects/$projectName"
-    val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component")
+
+    //batchEnable has a limit of 20 APIs to enable per call. we are currently at 20.
+    //next person to add an API has to make a second call ;)
+    val services = Seq(
+      "autoscaler.googleapis.com",
+      "bigquery-json.googleapis.com",
+      "clouddebugger.googleapis.com",
+      "container.googleapis.com",
+      "dataflow.googleapis.com",
+      "dataproc.googleapis.com",
+      "deploymentmanager.googleapis.com",
+      "genomics.googleapis.com",
+      "logging.googleapis.com",
+      "replicapool.googleapis.com",
+      "replicapoolupdater.googleapis.com",
+      "resourceviews.googleapis.com",
+      "sql-component.googleapis.com",
+      "storage-api.googleapis.com",
+      "storage-component.googleapis.com",
+      "cloudresourcemanager.googleapis.com",
+      "pubsub.googleapis.com",
+      "dataproc-control.googleapis.com",
+      "containerregistry.googleapis.com",
+      "compute.googleapis.com"
+    )
 
     def batchEnableGoogleServices(projectNumber: Long) = {
       val batchEnableProjectNumber = s"projects/$projectNumber"
