@@ -67,5 +67,9 @@ trait ActiveOperationComponent extends GPAllocComponent {
       }) map { _.sum }
     }
 
+    def deleteOpsForProject(billingProject: String): DBIO[Int] = {
+      findOperations(billingProject).delete
+    }
+
   }
 }

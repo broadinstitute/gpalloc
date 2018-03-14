@@ -210,4 +210,42 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
       mockGoogleDAO.scrubbedProjects shouldBe Set(newProjectName, newProjectName2)
     }
   }
+
+  it should "delete projects" in isolatedDbTest {
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
+
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 1)
+
+    //delete an unassigned project
+    gpAlloc.nukeProject(newProjectName).futureValue
+    mockGoogleDAO.deletedProjects shouldBe Set(newProjectName)
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldBe None
+
+    //respect the ?delete queryparam
+    gpAlloc.nukeProject(newProjectName2, deleteInGoogle = false).futureValue
+    mockGoogleDAO.deletedProjects shouldNot contain(newProjectName2)
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName2) } shouldBe None
+
+    //delete an assigned project
+    gpAlloc.nukeProject(newProjectName3).futureValue
+    mockGoogleDAO.deletedProjects should contain(newProjectName3)
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName3) } shouldBe None
+  }
+
+  it should "delete all projects" in isolatedDbTest {
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
+
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 1)
+
+    gpAlloc.nukeAllProjects().futureValue
+    eventually {
+      mockGoogleDAO.deletedProjects shouldBe Set(newProjectName, newProjectName2, newProjectName3)
+    }
+    dbFutureValue { _.billingProjectQuery.listEverything() } shouldEqual Seq()
+
+  }
 }

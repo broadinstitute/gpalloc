@@ -258,19 +258,26 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
+  //part ways
+  override def deleteProject(projectName: String): Future[Unit] = {
+    retryWhen500orGoogleError(() => {
+      executeGoogleRequest(cloudResources.projects.delete(projectName))
+    })
+  }
+
   def getGoogleProject(projectName: String): Future[Project] = {
     retryWhen500orGoogleError(() => {
       executeGoogleRequest(cloudResources.projects().get(projectName))
     })
   }
 
-  def googleRq[T](op: AbstractGoogleClientRequest[T]) = {
+  protected def googleRq[T](op: AbstractGoogleClientRequest[T]) = {
     retryWhen500orGoogleError(() => executeGoogleRequest(op))
   }
 
-  def cromwellAuthBucketName(bpName: String) = s"cromwell-auth-$bpName"
+  protected def cromwellAuthBucketName(bpName: String) = s"cromwell-auth-$bpName"
 
-  def createCromwellAuthBucket(billingProjectName: String, projectNumber: Long): Future[String] = {
+  protected def createCromwellAuthBucket(billingProjectName: String, projectNumber: Long): Future[String] = {
     val bucketName = cromwellAuthBucketName(billingProjectName)
     retryWithRecoverWhen500orGoogleError(
       () => {
@@ -288,7 +295,7 @@ class HttpGoogleBillingDAO(appName: String,
       }) { case t: HttpResponseException if t.getStatusCode == 409 => bucketName }
   }
 
-  private def leaveThisIAMPolicy(entityName: String, projectNumber: Long): Boolean = {
+  protected def leaveThisIAMPolicy(entityName: String, projectNumber: Long): Boolean = {
     if(entityName.startsWith("serviceAccount:")) {
       /* of course, Google's pre-generated SAs aren't consistently named:
        *   projectNumber-compute@developer.gserviceaccount.com
@@ -303,7 +310,7 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  def cleanupPolicyBindings(projectName: String, projectNumber: Long): Future[Unit] = {
+  protected def cleanupPolicyBindings(projectName: String, projectNumber: Long): Future[Unit] = {
     for {
       existingPolicy <- opThrottler.throttle( () => retryWhen500orGoogleError(() => {
         executeGoogleRequest(cloudResources.projects().getIamPolicy(projectName, null))
@@ -341,12 +348,12 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  private def shouldDeleteBucketACL(entityName: String): Boolean = {
+  protected def shouldDeleteBucketACL(entityName: String): Boolean = {
     !(entityName.startsWith("project-owners-") || entityName.startsWith("project-editors-"))
   }
 
   //removes all acls added to the cromwell auth bucket that aren't the project owner/editor ones
-  def cleanupCromwellAuthBucket(billingProjectName: String): Future[Unit] = {
+  protected def cleanupCromwellAuthBucket(billingProjectName: String): Future[Unit] = {
     val bucketName = cromwellAuthBucketName(billingProjectName)
     for {
       oAcls <- googleRq( storage.defaultObjectAccessControls.list(bucketName) )
@@ -368,7 +375,7 @@ class HttpGoogleBillingDAO(appName: String,
   //dear god, google. surely there's a better way
   def gProjectPath(project: String) = s"projects/$project"
 
-  def cleanupPets(projectName: String): Future[Unit] = {
+  protected def cleanupPets(projectName: String): Future[Unit] = {
     for {
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
       pets = googNull(serviceAccounts.getAccounts).filter(_.getEmail.startsWith("pet-"))
@@ -378,7 +385,7 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  def createStorageLogsBucket(billingProjectName: String): Future[String] = {
+  protected def createStorageLogsBucket(billingProjectName: String): Future[String] = {
     val bucketName = s"storage-logs-$billingProjectName"
     logger debug s"storage log bucket: $bucketName"
 
@@ -398,7 +405,7 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  def allowGoogleCloudStorageWrite(bucketName: String): Unit = {
+  protected def allowGoogleCloudStorageWrite(bucketName: String): Unit = {
     // add cloud-storage-analytics@google.com as a writer so it can write logs
     // do it as a separate call so bucket gets default permissions plus this one
     val bac = new BucketAccessControl().setEntity("group-cloud-storage-analytics@google.com").setRole("WRITER")

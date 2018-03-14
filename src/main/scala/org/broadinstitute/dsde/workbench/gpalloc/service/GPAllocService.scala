@@ -141,6 +141,29 @@ class GPAllocService(protected val dbRef: DbReference,
     Future.successful(())
   }
 
+  def nukeProject(project: String, deleteInGoogle: Boolean = true): Future[Unit] = {
+    logger.info(s"attempting nuke of project $project")
+    val nuke = for {
+      _ <- dbRef.inTransaction { da => da.billingProjectQuery.deleteProject(project) }
+      _ <- if(deleteInGoogle) googleBillingDAO.deleteProject(project) else Future.successful(())
+    } yield ()
+    nuke.onComplete {
+      case Failure(e) => logger.error(s"surprise error nuking project $project because $e")
+      case Success(_) => logger.info(s"successful nukeProject of $project")
+    }
+    nuke
+  }
+
+  def nukeAllProjects(deleteInGoogle: Boolean = true): Future[Unit] = {
+    logger.info("nuking all projects")
+    for {
+      allProjects <- dbRef.inTransaction { da => da.billingProjectQuery.listEverything() }
+      _ <- Future.traverse(allProjects) { rec => nukeProject(rec.billingProjectName, deleteInGoogle) }
+    } yield ()
+    //run the above future in the background because it's gonna take a while
+    Future.successful(())
+  }
+
   //create new google project if we don't have any available
   private def maybeCreateNewProjects(): Unit = {
     dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map {
