@@ -142,7 +142,7 @@ paths:
 
   '/api/admin/forceCleanupAll':
     delete:
-      summary: Force cleanup of all unassigned projects
+      summary: Reset all unassigned projects to their "fresh" state in Google.
       responses:
         '202':
           description: Accepted, will do it async
@@ -151,6 +151,61 @@ paths:
           schema:
             $ref: '#/definitions/ErrorReport'
       operationId: adminForceCleanupAll
+      tags:
+        - admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  '/api/admin/nuke/{projectName}':
+    delete:
+      summary: Make GPAlloc forget about a project, and stop assigning it. Will do this even if the project is currently assigned.
+      parameters:
+        - in: query
+          name: delete
+          description: Also delete the project from Google. Defaults to TRUE.
+          required: false
+          type: boolean
+        - in: path
+          name: projectName
+          description: googleProject
+          required: true
+          type: string
+      responses:
+        '200':
+          description: Yup, done
+        '500':
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: adminNukeProject
+      tags:
+        - admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  '/api/admin/nukeAll':
+    delete:
+      summary: Make GPAlloc forget about ALL projects. Will do this even if projects are currently assigned.
+      parameters:
+        - in: query
+          name: delete
+          description: Also delete projects from Google. Defaults to TRUE.
+          required: false
+          type: boolean
+      responses:
+        '202':
+          description: Accepted, will do it async
+        '500':
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: adminNukeAll
       tags:
         - admin
       security:
