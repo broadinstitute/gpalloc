@@ -15,4 +15,6 @@ abstract class GoogleDAO {
   def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord]
   def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]]
   def setupProjectBucketAccess(projectName: String): Future[Unit]
+
+  def deleteProject(projectName: String): Future[Unit]
 }

@@ -13,7 +13,7 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
   import profile.api._
   import CommonTestData.BillingProjectRecordEquality._
 
-  "BillingProjectComponent" should "list, save, get, and update" in isolatedDbTest {
+  "BillingProjectComponent" should "list, save, get, update, and delete" in isolatedDbTest {
     //nothing
     dbFutureValue { _.billingProjectQuery.getCreatingProjects } shouldEqual Seq()
 
@@ -34,6 +34,13 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     //look for something that isn't there
     dbFutureValue { _.billingProjectQuery.getBillingProject("nonexistent") } shouldEqual None
     dbFutureValue { _.billingProjectQuery.getAssignedBillingProject("nonexistent") } shouldEqual None
+
+    //delete one and look for it again
+    dbFutureValue { _.billingProjectQuery.deleteProject(newProjectName) }
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual None
+
+    //shouldn't have deleted the other
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName2) } shouldEqual Some(freshBillingProjectRecord(newProjectName2))
   }
 
   it should "update status manually" in isolatedDbTest {
@@ -107,7 +114,7 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     f.map(Success(_)).recover { case z => Failure(z) }
   }
 
-  it should "handle being too racy" in isolatedDbTest {
+  it should "handle being too racy when assigning projects" in isolatedDbTest {
     //add 50 projects
     (1 to 50) foreach { n =>
       dbFutureValue { _.billingProjectQuery.saveNew(s"$newProjectName-$n", BillingProjectStatus.Unassigned) }
@@ -136,4 +143,5 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     //thus proving that this code does (at least running locally on my machine!) force a real race condition
     //println(fails.length)
   }
+
 }
