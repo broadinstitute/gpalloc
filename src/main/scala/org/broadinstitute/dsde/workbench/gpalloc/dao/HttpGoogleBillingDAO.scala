@@ -200,9 +200,10 @@ class HttpGoogleBillingDAO(appName: String,
     val projectResourceName = s"projects/$projectName"
     val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component")
 
-    def batchEnableGoogleServices = {
+    def batchEnableGoogleServices(projectNumber: Long) = {
+      val batchEnableProjectNumber = s"projects/$projectNumber"
       retryWhen500orGoogleError(() => {
-        executeGoogleRequest(serviceUsage.services.batchEnable(projectResourceName, new BatchEnableServicesRequest().setServiceIds(services.asJava)))
+        executeGoogleRequest(serviceUsage.services.batchEnable(batchEnableProjectNumber, new BatchEnableServicesRequest().setServiceIds(services.asJava)))
       }) map { googleOperation =>
         Seq(ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode))))
       }
@@ -215,8 +216,10 @@ class HttpGoogleBillingDAO(appName: String,
         executeGoogleRequest(billingManager.projects().updateBillingInfo(projectResourceName, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(billingAccount)))
       }))
 
+      googleProject <- getGoogleProject(projectName)
+
       // enable appropriate google apis
-      operations <- opThrottler.throttle(() => batchEnableGoogleServices)
+      operations <- opThrottler.throttle(() => batchEnableGoogleServices(googleProject.getProjectNumber))
 
     } yield {
       operations
