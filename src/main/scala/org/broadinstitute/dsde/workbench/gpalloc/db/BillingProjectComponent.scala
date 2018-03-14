@@ -170,6 +170,13 @@ trait BillingProjectComponent extends GPAllocComponent {
         .update(None, BillingProjectStatus.Unassigned.toString, BillingProjectRecord.tsToDB(None))
     }
 
+    //Entirely forgets that this project ever existed.
+    def deleteProject(billingProject: String): DBIO[Int] = {
+      operationQuery.deleteOpsForProject(billingProject) flatMap { _ =>
+        findBillingProject(billingProject).delete
+      }
+    }
+
     def listEverything(): DBIO[Seq[BillingProjectRecord]] = {
       billingProjectQuery.result
     }

@@ -18,6 +18,7 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
   var bucketedProjects: mutable.Set[String] = mutable.Set.empty[String]
   var polledOpIds: mutable.Set[String] = mutable.Set.empty[String]
   var scrubbedProjects: mutable.Set[String] = mutable.Set.empty[String]
+  var deletedProjects: mutable.Set[String] = mutable.Set.empty[String]
 
   protected def randomOpName(opType: Option[String] = None): String =
     Seq(Some("googleOp"), opType, Some(Random.alphanumeric.take(5).mkString)).flatten.mkString("-")
@@ -54,6 +55,11 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
 
   def setupProjectBucketAccess(projectName: String): Future[Unit] = {
     bucketedProjects += projectName
+    Future.successful(())
+  }
+
+  override def deleteProject(projectName: String): Future[Unit] = {
+    deletedProjects += projectName
     Future.successful(())
   }
 }

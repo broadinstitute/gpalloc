@@ -88,6 +88,17 @@ abstract class GPAllocRoutes(val gpAllocService: GPAllocService, val swaggerConf
                 }
               }
             }
+          } ~
+          path("nuke" / Segment) { nukeme =>
+            delete {
+              parameters("delete" ? true) { delete =>
+                complete {
+                  gpAllocService.nukeProject(nukeme, delete).map { _ =>
+                    StatusCodes.OK
+                  }
+                }
+              }
+            }
           }
         }
 
