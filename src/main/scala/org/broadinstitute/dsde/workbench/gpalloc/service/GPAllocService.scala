@@ -148,8 +148,11 @@ class GPAllocService(protected val dbRef: DbReference,
       _ <- if(deleteInGoogle) googleBillingDAO.deleteProject(project) else Future.successful(())
     } yield ()
     nuke.onComplete {
-      case Failure(e) => logger.error(s"surprise error nuking project $project because $e")
-      case Success(_) => logger.info(s"successful nukeProject of $project")
+      case Failure(e) =>
+        logger.error(s"surprise error nuking project $project because $e")
+      case Success(_) =>
+        logger.info(s"successful nukeProject of $project")
+        maybeCreateNewProjects()
     }
     nuke
   }
