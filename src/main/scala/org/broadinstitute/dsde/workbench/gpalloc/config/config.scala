@@ -26,6 +26,8 @@ package object config {
       config.as[Int]("projectsPerSecondThrottle"),
       config.as[Int]("opsThrottle"),
       config.as[FiniteDuration]("opsThrottlePerDuration"),
+      config.as[Int]("enableThrottle"),
+      config.as[FiniteDuration]("enableThrottlePerDuration"),
       config.as[String]("projectPrefix")
     )
   }

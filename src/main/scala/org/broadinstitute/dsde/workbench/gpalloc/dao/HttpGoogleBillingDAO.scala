@@ -23,6 +23,7 @@ import com.google.api.services.storage.model.{Bucket, BucketAccessControl, Objec
 import com.google.api.services.storage.Storage
 import io.grpc.Status.Code
 import org.broadinstitute.dsde.workbench.google.GoogleUtilities
+import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
@@ -39,8 +40,7 @@ class HttpGoogleBillingDAO(appName: String,
                            serviceAccountPemFile: String,
                            billingPemEmail: String,
                            billingEmail: String,
-                           opsThrottle: Int,
-                           opsThrottlePerDuration: FiniteDuration)
+                           gpAllocConfig: GPAllocConfig)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
   extends GoogleDAO with GoogleUtilities {
 
@@ -57,7 +57,10 @@ class HttpGoogleBillingDAO(appName: String,
 
   //Google throttles other project service management requests (like operation polls) to 200 calls per 100 seconds.
   //However this is per SOURCE project of the SA making the requests, NOT the project you're making the request ON!
-  val opThrottler = new Throttler(system, opsThrottle, opsThrottlePerDuration, "GoogleOpThrottler")
+  val opThrottler = new Throttler(system, gpAllocConfig.opsThrottle, gpAllocConfig.opsThrottlePerDuration, "GoogleOpThrottler")
+
+  //And of course GCP has a totally different ratelimit for the call to batchEnable.
+  val batchEnableThrottler = new Throttler(system, gpAllocConfig.enableThrottle, gpAllocConfig.enableThrottlePerDuration, "GoogleBatchEnableThrottler")
 
   //giant bundle of scopes we need
   val saScopes = Seq(
@@ -243,7 +246,7 @@ class HttpGoogleBillingDAO(appName: String,
       googleProject <- getGoogleProject(projectName)
 
       // enable appropriate google apis
-      operations <- opThrottler.throttle(() => batchEnableGoogleServices(googleProject.getProjectNumber))
+      operations <- batchEnableThrottler.throttle(() => batchEnableGoogleServices(googleProject.getProjectNumber))
 
     } yield {
       operations

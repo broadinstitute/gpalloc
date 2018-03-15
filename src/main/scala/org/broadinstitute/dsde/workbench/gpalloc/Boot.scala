@@ -40,8 +40,7 @@ object Boot extends App with LazyLogging {
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
-      gpAllocConfig.opsThrottle,
-      gpAllocConfig.opsThrottlePerDuration)
+      gpAllocConfig)
 
     val projectCreationSupervisor = system.actorOf(
       ProjectCreationSupervisor.props(
