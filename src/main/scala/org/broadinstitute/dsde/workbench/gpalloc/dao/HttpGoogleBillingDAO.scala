@@ -202,8 +202,7 @@ class HttpGoogleBillingDAO(appName: String,
 
     val projectResourceName = s"projects/$projectName"
 
-    //batchEnable has a limit of 20 APIs to enable per call. we are currently at 20.
-    //next person to add an API has to make a second call ;)
+    //NOTE: batchEnable has a limit of 20 APIs to enable per call
     val services = Seq(
       "autoscaler.googleapis.com",
       "bigquery-json.googleapis.com",
