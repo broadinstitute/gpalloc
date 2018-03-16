@@ -219,12 +219,7 @@ class HttpGoogleBillingDAO(appName: String,
       "resourceviews.googleapis.com",
       "sql-component.googleapis.com",
       "storage-api.googleapis.com",
-      "storage-component.googleapis.com" /*,
-      "cloudresourcemanager.googleapis.com",
-      "pubsub.googleapis.com",
-      "dataproc-control.googleapis.com",
-      "containerregistry.googleapis.com",
-      "compute.googleapis.com"*/
+      "storage-component.googleapis.com"
     )
 
     def batchEnableGoogleServices(projectNumber: Long) = {
