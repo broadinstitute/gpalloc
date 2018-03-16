@@ -27,7 +27,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
-import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
+import org.broadinstitute.dsde.workbench.gpalloc.util.{Sequentially, Throttler}
 import org.broadinstitute.dsde.workbench.metrics.GoogleInstrumentedService
 import org.broadinstitute.dsde.workbench.model.ErrorReportSource
 
@@ -42,7 +42,7 @@ class HttpGoogleBillingDAO(appName: String,
                            billingEmail: String,
                            gpAllocConfig: GPAllocConfig)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
-  extends GoogleDAO with GoogleUtilities {
+  extends GoogleDAO with GoogleUtilities with Sequentially {
 
   protected val workbenchMetricBaseName = "billing"
   implicit val service = GoogleInstrumentedService.Iam
@@ -357,20 +357,7 @@ class HttpGoogleBillingDAO(appName: String,
     } yield ()
   }
 
-  //stolen: https://gist.github.com/ryanlecompte/6313683
-  def sequentially[A,T](items: Seq[A])(f: A => Future[T]): Future[Unit] = {
-    items.headOption match {
-      case Some(nextItem) =>
-        val fut = f(nextItem)
-        fut.flatMap { _ =>
-          // successful, let's move on to the next!
-          sequentially(items.tail)(f)
-        }
-      case None =>
-        // nothing left to process
-        Future.successful(())
-    }
-  }
+
 
   protected def shouldDeleteBucketACL(entityName: String): Boolean = {
     !(entityName.startsWith("project-owners-") || entityName.startsWith("project-editors-"))

@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 
 //Every call to throttle() costs one ticket. Every ticketRefreshTime, the number of tickets is reset to
 //tickets. If no tickets are available when throttle() is called, the throttler will wait until more are available.
-class Throttler(actorFactory: ActorRefFactory, tickets: Int, ticketRefreshTime: FiniteDuration, name: String) {
+class Throttler(actorFactory: ActorRefFactory, tickets: Int, ticketRefreshTime: FiniteDuration, name: String) extends Sequentially {
 
   val throttleWorker = actorFactory.actorOf(ThrottleWorker.props(), s"throttleWorker-$name")
 
@@ -44,6 +44,13 @@ class Throttler(actorFactory: ActorRefFactory, tickets: Int, ticketRefreshTime: 
 
   def throttle[T](op: () => Future[T])(implicit ec: ExecutionContext): Future[T] = {
     (throttler ? Work(op)).asInstanceOf[Future[T]]
+  }
+
+  //Chew up more than one ticket.
+  def throttle[T](tickets: Int)(op: () => Future[T])(implicit ec: ExecutionContext): Future[T] = {
+    sequentially(1 to (tickets-1))(_ => Future.successful(())) flatMap { _ =>
+      throttle(op)
+    }
   }
 
   def sequence[T]( ops: Seq[ () => Future[T] ] )(implicit ec: ExecutionContext): Future[Seq[T]] = {
