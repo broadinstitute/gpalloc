@@ -3,36 +3,33 @@ package org.broadinstitute.dsde.workbench.gpalloc.dao
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.googleapis.auth.oauth2.{GoogleClientSecrets, GoogleCredential}
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
 import com.google.api.client.http.HttpResponseException
 import com.google.api.client.json.jackson2.JacksonFactory
-import com.google.api.services.admin.directory.DirectoryScopes
 import com.google.api.services.cloudbilling.Cloudbilling
 import com.google.api.services.cloudbilling.model.ProjectBillingInfo
 import com.google.api.services.cloudresourcemanager.CloudResourceManager
 import com.google.api.services.cloudresourcemanager.model.{Binding, Project, SetIamPolicyRequest, Operation => CRMOperation}
 import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
-import com.google.api.services.genomics.GenomicsScopes
 import com.google.api.services.iam.v1.Iam
-import com.google.api.services.iam.v1.model.{ServiceAccount, ServiceAccountKey}
-import com.google.api.services.plus.PlusScopes
-import com.google.api.services.servicemanagement.ServiceManagement
-import com.google.api.services.servicemanagement.model.{EnableServiceRequest, Operation => SMOperation}
+import com.google.api.services.serviceusage.v1beta1.ServiceUsage
+import com.google.api.services.serviceusage.v1beta1.model.{BatchEnableServicesRequest, Operation => SUOperation}
 import com.google.api.services.storage.model.Bucket.Lifecycle
 import com.google.api.services.storage.model.Bucket.Lifecycle.Rule.{Action, Condition}
 import com.google.api.services.storage.model.{Bucket, BucketAccessControl, ObjectAccessControl}
-import com.google.api.services.storage.{Storage, StorageScopes}
+import com.google.api.services.storage.Storage
 import io.grpc.Status.Code
 import org.broadinstitute.dsde.workbench.google.GoogleUtilities
+import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
-import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus, GPAllocException}
-import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
-import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService}
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
+import org.broadinstitute.dsde.workbench.gpalloc.util.{Sequentially, Throttler}
+import org.broadinstitute.dsde.workbench.metrics.GoogleInstrumentedService
+import org.broadinstitute.dsde.workbench.model.ErrorReportSource
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
@@ -43,10 +40,9 @@ class HttpGoogleBillingDAO(appName: String,
                            serviceAccountPemFile: String,
                            billingPemEmail: String,
                            billingEmail: String,
-                           opsThrottle: Int,
-                           opsThrottlePerDuration: FiniteDuration)
+                           gpAllocConfig: GPAllocConfig)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
-  extends GoogleDAO with GoogleUtilities {
+  extends GoogleDAO with GoogleUtilities with Sequentially {
 
   protected val workbenchMetricBaseName = "billing"
   implicit val service = GoogleInstrumentedService.Iam
@@ -61,7 +57,10 @@ class HttpGoogleBillingDAO(appName: String,
 
   //Google throttles other project service management requests (like operation polls) to 200 calls per 100 seconds.
   //However this is per SOURCE project of the SA making the requests, NOT the project you're making the request ON!
-  val opThrottler = new Throttler(system, opsThrottle, opsThrottlePerDuration, "GoogleOpThrottler")
+  val opThrottler = new Throttler(system, gpAllocConfig.opsThrottle, gpAllocConfig.opsThrottlePerDuration, "GoogleOpThrottler")
+
+  //And of course GCP has a totally different ratelimit for the call to batchEnable.
+  val batchEnableThrottler = new Throttler(system, gpAllocConfig.enableThrottle, gpAllocConfig.enableThrottlePerDuration, "GoogleBatchEnableThrottler")
 
   //giant bundle of scopes we need
   val saScopes = Seq(
@@ -88,8 +87,8 @@ class HttpGoogleBillingDAO(appName: String,
     new CloudResourceManager.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
-  def servicesManager: ServiceManagement = {
-    new ServiceManagement.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
+  def serviceUsage: ServiceUsage = {
+    new ServiceUsage.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
   def computeManager: Compute = {
@@ -138,7 +137,7 @@ class HttpGoogleBillingDAO(appName: String,
   override def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
 
     // this code is a colossal DRY violation but because the operations collection is different
-    // for cloudResManager and servicesManager and they return different but identical Status objects
+    // for cloudResManager and serviceUsage and they return different but identical Status objects
     // there is not much else to be done... too bad scala does not have duck typing.
     operation.operationType match {
       case CreatingProject =>
@@ -155,12 +154,12 @@ class HttpGoogleBillingDAO(appName: String,
 
       case EnablingServices =>
         opThrottler.throttle(() => retryWithRecoverWhen500orGoogleError(() => {
-          executeGoogleRequest(servicesManager.operations().get(operation.operationId))
+          executeGoogleRequest(serviceUsage.operations().get(operation.operationId))
         }) {
           case t: HttpResponseException if t.getStatusCode == 429 =>
             //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
             logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
-            new SMOperation().setDone(false).setError(null)
+            new SUOperation().setDone(false).setError(null)
         }).map { op =>
           operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
         }
@@ -199,18 +198,41 @@ class HttpGoogleBillingDAO(appName: String,
 
   // part 2
   override def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
-
     val billingManager = billing
-    val serviceManager = servicesManager
 
     val projectResourceName = s"projects/$projectName"
-    val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component")
 
-    def enableGoogleService(service: String) = {
+    //batchEnable has a limit of 20 APIs to enable per call. we are currently at 20.
+    //next person to add an API has to make a second call ;)
+    val services = Seq(
+      "autoscaler.googleapis.com",
+      "bigquery-json.googleapis.com",
+      "clouddebugger.googleapis.com",
+      "container.googleapis.com",
+      "dataflow.googleapis.com",
+      "dataproc.googleapis.com",
+      "deploymentmanager.googleapis.com",
+      "genomics.googleapis.com",
+      "logging.googleapis.com",
+      "replicapool.googleapis.com",
+      "replicapoolupdater.googleapis.com",
+      "resourceviews.googleapis.com",
+      "sql-component.googleapis.com",
+      "storage-api.googleapis.com",
+      "storage-component.googleapis.com" /*,
+      "cloudresourcemanager.googleapis.com",
+      "pubsub.googleapis.com",
+      "dataproc-control.googleapis.com",
+      "containerregistry.googleapis.com",
+      "compute.googleapis.com"*/
+    )
+
+    def batchEnableGoogleServices(projectNumber: Long) = {
+      val batchEnableProjectNumber = s"projects/$projectNumber"
       retryWhen500orGoogleError(() => {
-        executeGoogleRequest(serviceManager.services().enable(service, new EnableServiceRequest().setConsumerId(s"project:${projectName}")))
+        executeGoogleRequest(serviceUsage.services.batchEnable(batchEnableProjectNumber, new BatchEnableServicesRequest().setServiceIds(services.asJava)))
       }) map { googleOperation =>
-        ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+        Seq(ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode))))
       }
     }
 
@@ -221,8 +243,10 @@ class HttpGoogleBillingDAO(appName: String,
         executeGoogleRequest(billingManager.projects().updateBillingInfo(projectResourceName, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(billingAccount)))
       }))
 
+      googleProject <- getGoogleProject(projectName)
+
       // enable appropriate google apis
-      operations <- opThrottler.sequence(services.map { service => { () => enableGoogleService(service) } })
+      operations <- batchEnableThrottler.throttle(() => batchEnableGoogleServices(googleProject.getProjectNumber))
 
     } yield {
       operations
@@ -333,20 +357,7 @@ class HttpGoogleBillingDAO(appName: String,
     } yield ()
   }
 
-  //stolen: https://gist.github.com/ryanlecompte/6313683
-  def sequentially[A,T](items: Seq[A])(f: A => Future[T]): Future[Unit] = {
-    items.headOption match {
-      case Some(nextItem) =>
-        val fut = f(nextItem)
-        fut.flatMap { _ =>
-          // successful, let's move on to the next!
-          sequentially(items.tail)(f)
-        }
-      case None =>
-        // nothing left to process
-        Future.successful(())
-    }
-  }
+
 
   protected def shouldDeleteBucketACL(entityName: String): Boolean = {
     !(entityName.startsWith("project-owners-") || entityName.startsWith("project-editors-"))

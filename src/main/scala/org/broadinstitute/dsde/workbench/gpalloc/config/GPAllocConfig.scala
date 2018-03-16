@@ -11,5 +11,7 @@ case class GPAllocConfig(
                           projectsPerSecondThrottle: Int,
                           opsThrottle: Int,
                           opsThrottlePerDuration: FiniteDuration,
+                          enableThrottle: Int,
+                          enableThrottlePerDuration: FiniteDuration,
                           projectPrefix: String
                         )

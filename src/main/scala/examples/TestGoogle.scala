@@ -12,6 +12,8 @@ import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import akka.contrib.throttle.Throttler.RateInt
+import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
@@ -30,6 +32,7 @@ object TestGoogle extends App {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val gcsConfig = config.getConfig("gcs")
+    val gpAllocConfig = config.as[GPAllocConfig]("gpalloc")
     val jsonFactory = JacksonFactory.getDefaultInstance
 
     val gDAO = new HttpGoogleBillingDAO(
@@ -37,8 +40,7 @@ object TestGoogle extends App {
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
-      1,
-      1 second)
+      gpAllocConfig)
 
     val projectName = "gpalloc-dev-develop-sywr9jt"
 
