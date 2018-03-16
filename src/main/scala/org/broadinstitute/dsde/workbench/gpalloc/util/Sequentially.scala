@@ -1,10 +1,10 @@
 package org.broadinstitute.dsde.workbench.gpalloc.util
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 trait Sequentially {
   //stolen: https://gist.github.com/ryanlecompte/6313683
-  def sequentially[A,T](items: Seq[A])(f: A => Future[T]): Future[Unit] = {
+  def sequentially[A,T](items: Seq[A])(f: A => Future[T])(implicit executionContext: ExecutionContext): Future[Unit] = {
     items.headOption match {
       case Some(nextItem) =>
         val fut = f(nextItem)
