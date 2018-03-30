@@ -371,7 +371,7 @@ class HttpGoogleBillingDAO(appName: String,
   def cleanupPets(projectName: String): Future[Unit] = {
     for {
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
-      pets = googNull(serviceAccounts.getAccounts).filter(_.getEmail.startsWith("pet-"))
+      pets = googNull(serviceAccounts.getAccounts).filter(_.getEmail.contains(s"@$projectName.iam.gserviceaccount.com"))
       _ <- sequentially(pets) { pet => googleRq( iam.projects.serviceAccounts.delete(pet.getName) ) }
     } yield {
       //nah
