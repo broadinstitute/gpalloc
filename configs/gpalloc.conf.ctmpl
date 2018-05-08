@@ -1,7 +1,7 @@
 {{with $environment := env "ENVIRONMENT"}}
 {{with $image := env "IMAGE"}}
 {{with $billingPemSecrets := vault (printf "secret/dsde/firecloud/%s/common/billing-account.pem" $environment)}}
-{{with $refreshTokenServiceAccount := vault (printf "secret/dsde/firecloud/%s/common/refresh-token-service-account.json" $environment)}}
+{{with $refreshTokenServiceAccount := vault (printf "secret/dsde/firecloud/%s/common/refresh-token-oauth-credential.json" $environment)}}
 
 gcs {
   pathToBillingPem = "/etc/billing-account.pem"
