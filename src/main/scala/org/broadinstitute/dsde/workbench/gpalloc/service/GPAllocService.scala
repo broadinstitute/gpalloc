@@ -28,7 +28,8 @@ class GPAllocService(protected val dbRef: DbReference,
                      protected val swaggerConfig: SwaggerConfig,
                      projectCreationSupervisor: ActorRef,
                      googleBillingDAO: GoogleDAO,
-                     gpAllocConfig: GPAllocConfig)
+                     gpAllocConfig: GPAllocConfig,
+                     defaultBillingAccount: String)
                     (implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   //on creation, tell the supervisor we exist
@@ -79,7 +80,7 @@ class GPAllocService(protected val dbRef: DbReference,
         //onComplete will return the original future, i.e. authCheck, and not wait for onComplete to complete.
         //we're kicking off this work but not monitoring it.
         val scrub = for {
-          _ <- googleBillingDAO.scrubBillingProject(project)
+          _ <- googleBillingDAO.scrubBillingProject(project, defaultBillingAccount)
           _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
         } yield {
           logger.info(s"successfully released ${if(becauseAbandoned) "abandoned " else ""}project $project")
@@ -121,7 +122,7 @@ class GPAllocService(protected val dbRef: DbReference,
       //the below future will fail if the project is already assigned to someone else.
       //that's okay -- we don't want to clean it up in that case.
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.maybeRacyAssignProjectToOwner("gpalloc@cleaning.up", project) }
-      _ <- googleBillingDAO.scrubBillingProject(project)
+      _ <- googleBillingDAO.scrubBillingProject(project, defaultBillingAccount)
       _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
     } yield ()
     cleanup.onComplete {
