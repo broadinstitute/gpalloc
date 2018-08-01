@@ -57,9 +57,21 @@ local $ ./docker/build.sh jar
 local $ ./docker/build.sh -d build
 local $ ./docker/build.sh -d push
 ```  
-2. SSH into the machine.
+**Jenkins automated deployment**
+
+2. Determine the IP of the beta host with `nslookup http://gpalloc-beta-priv.dsp-techops.broadinstitute.org`
+3. Go to the [gpalloc-instance-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/view/Deploy/job/gpalloc-instance-deploy/) Jenkins job.
+4. In `Build with Parameters`:
+   - `PRIV_HOST` : the IP from step 2
+   - `IMAGE` : the name of the docker image from step 1 (default same as branch name)
+   - `ENVIRONMENT` : dev
 3. Edit `/app/docker-compose.yaml` to point to your new Docker image.
-4. Restart the Docker:
+4. Click `Build`
+
+**Manual Deployment**
+1. SSH into the machine.
+2. Edit `/app/docker-compose.yaml` to point to your new Docker image.
+3. Restart the Docker:
 ```
 gpalloc-beta $ sudo docker-compose -p gpalloc -f /app/docker-compose.yml stop
 gpalloc-beta $ sudo docker-compose -p gpalloc -f /app/docker-compose.yml rm -f
