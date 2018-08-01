@@ -26,7 +26,7 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
     Future.successful(AssignedProject(project, s"cromwell-bucket-$project"))
   }
 
-  def scrubBillingProject(projectName: String, defaultBillingAccount: String): Future[Unit] = {
+  def scrubBillingProject(projectName: String): Future[Unit] = {
     scrubbedProjects += projectName
     Future.successful(())
   }

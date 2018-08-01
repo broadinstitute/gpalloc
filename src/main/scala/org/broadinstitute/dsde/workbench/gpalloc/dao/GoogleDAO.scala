@@ -8,7 +8,7 @@ import scala.concurrent.Future
 
 abstract class GoogleDAO {
   def transferProjectOwnership(project: String, owner: String): Future[AssignedProject]
-  def scrubBillingProject(projectName: String, defaultBillingAccount: String): Future[Unit]
+  def scrubBillingProject(projectName: String): Future[Unit]
 
   def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord]
 

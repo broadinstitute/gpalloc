@@ -43,6 +43,7 @@ class HttpGoogleBillingDAO(appName: String,
                            serviceAccountPemFile: String,
                            billingPemEmail: String,
                            billingEmail: String,
+                           defaultBillingAccount: String,
                            opsThrottle: Int,
                            opsThrottlePerDuration: FiniteDuration)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
@@ -129,7 +130,7 @@ class HttpGoogleBillingDAO(appName: String,
     Future.successful(AssignedProject(project, cromwellAuthBucketName(project)))
   }
 
-  override def scrubBillingProject(projectName: String, defaultBillingAccount: String): Future[Unit] = {
+  override def scrubBillingProject(projectName: String): Future[Unit] = {
     val billingManager = billing
     for {
       googleProject <- getGoogleProject(projectName)

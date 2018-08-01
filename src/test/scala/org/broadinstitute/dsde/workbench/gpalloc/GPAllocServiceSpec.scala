@@ -23,7 +23,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
     val newConf = gpAllocConfig.copy(minimumFreeProjects=minimumFreeProjects, abandonmentTime=abandonmentTime)
-    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, newConf, testBillingAccount)
+    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, newConf)
     probe.expectMsgClass(1 seconds, classOf[RegisterGPAllocService])
     (gpAlloc, probe, mockGoogleDAO)
   }

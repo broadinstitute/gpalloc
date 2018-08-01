@@ -31,19 +31,20 @@ object TestGoogle extends App {
 
     val gcsConfig = config.getConfig("gcs")
     val jsonFactory = JacksonFactory.getDefaultInstance
+    val defaultBillingAccount = gcsConfig.getString("billingAccount")
 
     val gDAO = new HttpGoogleBillingDAO(
       "gpalloc", //appName
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
+      defaultBillingAccount,
       1,
       1 second)
 
     val projectName = "gpalloc-dev-develop-sywr9jt"
-    val defaultBillingAccount = gcsConfig.getString("billingAccount")
 
-    testScrubProject(gDAO, projectName, defaultBillingAccount)
+    testScrubProject(gDAO, projectName)
 
     //testEnableCloudServices(gDAO, projectName, gcsConfig.getString("billingAccount"))
     //testPollOp(gDAO, projectName, ActiveOperationRecord("gpalloc-test-project",BillingProjectStatus.EnablingServices,"operations/tmo-acf.c8c99528-2900-46cb-a676-07da63ac5da1",false,None))
@@ -80,8 +81,8 @@ object TestGoogle extends App {
     }
   }
 
-  def testScrubProject(gDAO: HttpGoogleBillingDAO, projectName: String, defaultBillingAccount: String)(implicit ec: ExecutionContext): Unit = {
-    gDAO.scrubBillingProject(projectName, defaultBillingAccount).onComplete {
+  def testScrubProject(gDAO: HttpGoogleBillingDAO, projectName: String)(implicit ec: ExecutionContext): Unit = {
+    gDAO.scrubBillingProject(projectName).onComplete {
       case Success(_) => println(s"succeeded scrubbing $projectName")
       case Failure(e) => println(e.toString)
     }

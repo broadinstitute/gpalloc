@@ -35,15 +35,17 @@ object Boot extends App with LazyLogging {
 
     val jsonFactory = JacksonFactory.getDefaultInstance
 
+    val defaultBillingAccount = gcsConfig.getString("billingAccount")
+
     val googleBillingDAO = new HttpGoogleBillingDAO(
       "gpalloc", //appName
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
+      defaultBillingAccount,
       gpAllocConfig.opsThrottle,
       gpAllocConfig.opsThrottlePerDuration)
 
-    val defaultBillingAccount = gcsConfig.getString("billingAccount")
     val projectCreationSupervisor = system.actorOf(
       ProjectCreationSupervisor.props(
         defaultBillingAccount,
@@ -53,7 +55,7 @@ object Boot extends App with LazyLogging {
       "projectCreationSupervisor")
     projectCreationSupervisor ! ResumeAllProjects
 
-    val gpAllocService = new GPAllocService(dbRef, swaggerConfig, projectCreationSupervisor, googleBillingDAO, gpAllocConfig, defaultBillingAccount)
+    val gpAllocService = new GPAllocService(dbRef, swaggerConfig, projectCreationSupervisor, googleBillingDAO, gpAllocConfig)
     val gpallocRoutes = new GPAllocRoutes(gpAllocService, swaggerConfig) with StandardUserInfoDirectives
 
       Http().bindAndHandle(gpallocRoutes.route, "0.0.0.0", 8080)
