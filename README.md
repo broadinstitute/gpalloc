@@ -59,7 +59,7 @@ local $ ./docker/build.sh -d push
 ```  
 **Jenkins automated deployment**
 
-2. Determine the IP of the beta host with `nslookup http://gpalloc-beta-priv.dsp-techops.broadinstitute.org`
+2. Determine the IP of the `-beta` host with `nslookup http://gpalloc-beta-priv.dsp-techops.broadinstitute.org`
 3. Go to the [gpalloc-instance-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/view/Deploy/job/gpalloc-instance-deploy/) Jenkins job.
 4. In `Build with Parameters`:
    - `PRIV_HOST` : the IP from step 2
