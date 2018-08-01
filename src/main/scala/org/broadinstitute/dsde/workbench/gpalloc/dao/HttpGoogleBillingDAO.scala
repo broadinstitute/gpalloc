@@ -116,9 +116,9 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  private def updateGoogleBillingInfo[T](projectResourceName: String, billingAccount: String)(op: (String, String) => AbstractGoogleClientRequest[T]) = {
+  private def updateGoogleBillingInfo(projectResourceName: String, billingAccount: String) = {
     opThrottler.throttle( () => retryWhen500orGoogleError(() => {
-      executeGoogleRequest(op(projectResourceName, billingAccount))
+      executeGoogleRequest(billing.projects().updateBillingInfo(projectResourceName, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(billingAccount)))
     }))
   }
 
@@ -131,15 +131,12 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
   override def scrubBillingProject(projectName: String): Future[Unit] = {
-    val billingManager = billing
     for {
       googleProject <- getGoogleProject(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupPets(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
-      _ <- updateGoogleBillingInfo(projectName, defaultBillingAccount) { (project, account) =>
-        billingManager.projects().updateBillingInfo(project, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(account))
-      }
+      _ <- updateGoogleBillingInfo(projectName, defaultBillingAccount)
     } yield {
       //nah
     }
@@ -211,7 +208,6 @@ class HttpGoogleBillingDAO(appName: String,
   // part 2
   override def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
 
-    val billingManager = billing
     val serviceManager = servicesManager
 
     val projectResourceName = s"projects/$projectName"
@@ -228,9 +224,7 @@ class HttpGoogleBillingDAO(appName: String,
     // all of these things should be idempotent
     for {
     // set the billing account
-      _ <- updateGoogleBillingInfo(projectResourceName, billingAccount) { (project, account) =>
-        billingManager.projects().updateBillingInfo(project, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(account))
-      }
+      _ <- updateGoogleBillingInfo(projectResourceName, billingAccount)
 
       // enable appropriate google apis
       operations <- opThrottler.sequence(services.map { service => { () => enableGoogleService(service) } })
