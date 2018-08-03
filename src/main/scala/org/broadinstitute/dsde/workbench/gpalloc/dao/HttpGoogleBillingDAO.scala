@@ -43,6 +43,7 @@ class HttpGoogleBillingDAO(appName: String,
                            serviceAccountPemFile: String,
                            billingPemEmail: String,
                            billingEmail: String,
+                           defaultBillingAccount: String,
                            opsThrottle: Int,
                            opsThrottlePerDuration: FiniteDuration)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
@@ -115,6 +116,12 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
+  private def updateGoogleBillingInfo(projectResourceName: String, billingAccount: String) = {
+    opThrottler.throttle( () => retryWhen500orGoogleError(() => {
+      executeGoogleRequest(billing.projects().updateBillingInfo(projectResourceName, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(billingAccount)))
+    }))
+  }
+
   override def transferProjectOwnership(project: String, owner: String): Future[AssignedProject] = {
     /* NOTE: There is no work to be done here. It is up to the caller, inside their own FC stack to:
      * - add the project to the rawls db
@@ -129,6 +136,7 @@ class HttpGoogleBillingDAO(appName: String,
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupPets(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
+      _ <- updateGoogleBillingInfo(projectName, defaultBillingAccount)
     } yield {
       //nah
     }
@@ -200,7 +208,6 @@ class HttpGoogleBillingDAO(appName: String,
   // part 2
   override def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
 
-    val billingManager = billing
     val serviceManager = servicesManager
 
     val projectResourceName = s"projects/$projectName"
@@ -217,9 +224,7 @@ class HttpGoogleBillingDAO(appName: String,
     // all of these things should be idempotent
     for {
     // set the billing account
-      billing <- opThrottler.throttle( () => retryWhen500orGoogleError(() => {
-        executeGoogleRequest(billingManager.projects().updateBillingInfo(projectResourceName, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(billingAccount)))
-      }))
+      _ <- updateGoogleBillingInfo(projectResourceName, billingAccount)
 
       // enable appropriate google apis
       operations <- opThrottler.sequence(services.map { service => { () => enableGoogleService(service) } })
