@@ -6,6 +6,8 @@ Makes creating billing projects snappy
 
 For instructions on how to use GPAlloc to provide you with Google projects, see [here](USAGE.md).
 
+If you need help debugging GPAlloc-related errors, see [here](HELP.md).
+
 ## Managing GPAlloc
 
 There are three GPAlloc instances, all of which live in the `broad-dsp-techops` Google project.
