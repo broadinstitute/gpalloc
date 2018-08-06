@@ -31,14 +31,12 @@ object TestGoogle extends App {
 
     val gcsConfig = config.getConfig("gcs")
     val jsonFactory = JacksonFactory.getDefaultInstance
-    val defaultBillingAccount = gcsConfig.getString("billingAccount")
 
     val gDAO = new HttpGoogleBillingDAO(
       "gpalloc", //appName
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
-      defaultBillingAccount,
       1,
       1 second)
 
