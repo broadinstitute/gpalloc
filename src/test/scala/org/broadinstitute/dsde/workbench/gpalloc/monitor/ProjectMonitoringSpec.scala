@@ -33,7 +33,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
   val tenMillisPollIntervalConf = gpAllocConfig.copy(projectMonitorPollInterval = 10 millis)
 
   def withSupervisor[T](gDAO: GoogleDAO, gpAllocConfig: GPAllocConfig = gpAllocConfig)(op: TestActorRef[TestProjectCreationSupervisor] => T): T = {
-    val monitorRef = TestActorRef[TestProjectCreationSupervisor](TestProjectCreationSupervisor.props(testBillingAccount, dbRef, gDAO, gpAllocConfig, this))
+    val monitorRef = TestActorRef[TestProjectCreationSupervisor](TestProjectCreationSupervisor.props("testBillingAccount", dbRef, gDAO, gpAllocConfig, this))
 
     val result = op(monitorRef)
     monitorRef ! PoisonPill

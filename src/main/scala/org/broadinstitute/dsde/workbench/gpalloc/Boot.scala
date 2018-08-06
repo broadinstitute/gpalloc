@@ -35,20 +35,17 @@ object Boot extends App with LazyLogging {
 
     val jsonFactory = JacksonFactory.getDefaultInstance
 
-    val defaultBillingAccount = gcsConfig.getString("billingAccount")
-
     val googleBillingDAO = new HttpGoogleBillingDAO(
       "gpalloc", //appName
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
-      defaultBillingAccount,
       gpAllocConfig.opsThrottle,
       gpAllocConfig.opsThrottlePerDuration)
 
     val projectCreationSupervisor = system.actorOf(
       ProjectCreationSupervisor.props(
-        defaultBillingAccount,
+        gcsConfig.getString("billingAccount"),
         dbRef,
         googleBillingDAO,
         gpAllocConfig),
