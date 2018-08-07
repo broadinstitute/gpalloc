@@ -51,7 +51,7 @@ Otherwise Google won't let you create the project (name too long or contains inv
 
 To deploy something custom to `-beta`, do the following:
 
-1. Manually build and push your branch of gpalloc to DockerHub:  
+Manually build and push your branch of gpalloc to DockerHub:  
 ```
 local $ ./docker/build.sh jar
 local $ ./docker/build.sh -d build
@@ -59,13 +59,12 @@ local $ ./docker/build.sh -d push
 ```  
 **Jenkins automated deployment**
 
-2. Determine the IP of the `-beta` host with `nslookup http://gpalloc-beta-priv.dsp-techops.broadinstitute.org`
-3. Go to the [gpalloc-instance-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/view/Deploy/job/gpalloc-instance-deploy/) Jenkins job.
-4. In `Build with Parameters`:
+1. Determine the IP of the `-beta` host with `nslookup http://gpalloc-beta-priv.dsp-techops.broadinstitute.org`
+2. Go to the [gpalloc-instance-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/view/Deploy/job/gpalloc-instance-deploy/) Jenkins job.
+3. In `Build with Parameters`:
    - `PRIV_HOST` : the IP from step 2
    - `IMAGE` : the name of the docker image from step 1 (default same as branch name)
    - `ENVIRONMENT` : dev
-3. Edit `/app/docker-compose.yaml` to point to your new Docker image.
 4. Click `Build`
 
 **Manual Deployment**
