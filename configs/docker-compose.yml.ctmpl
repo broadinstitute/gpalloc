@@ -4,7 +4,7 @@ app:
   image: broadinstitute/gpalloc:{{$image}}
   log_driver: "syslog"
   log_opt:
-    {{if ge $target_docker_version "1.12"}}tag{{else}}syslog-tag{{end}}: "gpalloc-app"
+    tag: "gpalloc-app"
   ports:
     - "8080:8080"
     - "50000:50000"
@@ -23,7 +23,7 @@ mysql:
   image: mysql:5.7.15
   log_driver: "syslog"
   log_opt:
-    {{if ge $target_docker_version "1.12"}}tag{{else}}syslog-tag{{end}}: "gpalloc-mysql"
+    tag: "gpalloc-mysql"
   expose:
     - "3306"
   environment:
@@ -38,7 +38,7 @@ proxy:
   image: broadinstitute/openidc-proxy:latest
   log_driver: "syslog"
   log_opt:
-    {{if ge $target_docker_version "1.12"}}tag{{else}}syslog-tag{{end}}: "gpalloc-proxy"
+    tag: "gpalloc-proxy"
   ports:
     - "80:80"
     - "443:443"
