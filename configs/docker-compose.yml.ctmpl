@@ -2,6 +2,9 @@
 {{with $image := env "IMAGE"}}
 app:
   image: broadinstitute/gpalloc:{{$image}}
+  log_driver: "syslog"
+  log_opt:
+    tag: "gpalloc-app"
   ports:
     - "8080:8080"
     - "50000:50000"
@@ -18,6 +21,9 @@ app:
 
 mysql:
   image: mysql:5.7.15
+  log_driver: "syslog"
+  log_opt:
+    tag: "gpalloc-mysql"
   expose:
     - "3306"
   environment:
@@ -30,6 +36,9 @@ mysql:
 
 proxy:
   image: broadinstitute/openidc-proxy:latest
+  log_driver: "syslog"
+  log_opt:
+    tag: "gpalloc-proxy"
   ports:
     - "80:80"
     - "443:443"
@@ -40,7 +49,7 @@ proxy:
     SERVER_NAME: {{if eq $image "master"}}gpalloc-{{$environment}}{{else}}gpalloc-beta{{end}}.dsp-techops.broadinstute.org
     PROXY_URL: http://app:8080/
     SSL_PROTOCOL: "-SSLv2 -SSLv3 -TLSv1 -TLSv1.1 +TLSv1.2"
-    LOG_LEVEL: debug
+    LOG_LEVEL: warn
   volumes:
     - /app/server.crt:/etc/ssl/certs/server.crt:ro
     - /app/server.key:/etc/ssl/private/server.key:ro
