@@ -116,7 +116,8 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  private def updateGoogleBillingInfo(projectResourceName: String, billingAccount: String) = {
+  private def updateGoogleBillingInfo(projectName: String, billingAccount: String) = {
+    val projectResourceName = s"projects/$projectName"
     opThrottler.throttle( () => retryWhen500orGoogleError(() => {
       executeGoogleRequest(billing.projects().updateBillingInfo(projectResourceName, new ProjectBillingInfo().setBillingEnabled(true).setBillingAccountName(billingAccount)))
     }))
@@ -210,7 +211,6 @@ class HttpGoogleBillingDAO(appName: String,
 
     val serviceManager = servicesManager
 
-    val projectResourceName = s"projects/$projectName"
     val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component")
 
     def enableGoogleService(service: String) = {
@@ -224,7 +224,7 @@ class HttpGoogleBillingDAO(appName: String,
     // all of these things should be idempotent
     for {
     // set the billing account
-      _ <- updateGoogleBillingInfo(projectResourceName, billingAccount)
+      _ <- updateGoogleBillingInfo(projectName, billingAccount)
 
       // enable appropriate google apis
       operations <- opThrottler.sequence(services.map { service => { () => enableGoogleService(service) } })
