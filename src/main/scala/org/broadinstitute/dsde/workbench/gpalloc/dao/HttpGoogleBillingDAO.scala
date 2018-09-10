@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.gpalloc.dao
 import java.util.UUID
 
 import akka.actor.ActorSystem
+import akka.cluster.Cluster
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import cats.data.OptionT
 import com.google.api.client.auth.oauth2.Credential
@@ -395,29 +396,15 @@ class HttpGoogleBillingDAO(appName: String,
 
   def cleanupClusters(projectName: String): Future[Unit] = {
     for {
-      clusterNames <- listClusters(projectName)
-      _ <- clusterNames.map(clusterName => deleteCluster(projectName, clusterName))
-    } yield {
-      //nah
-    }
-  }
-
-  private def listClusters(projectName: String): Future[List[String]] = {
-    for {
       result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-west1"))
-      googleClusters <- OptionT.fromOption[Future](Option(result.getClusters))
-    } yield {
-      googleClusters.asScala.toList.map(c => c.getClusterName)
-    }
-  }
-
-  private def deleteCluster(projectName: String, clusterName: String) = {
-    for {
-      _ <- googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-west1", clusterName))
+      googleClusters = googNull(result.getClusters)
+      clusterNames = googleClusters.map(c => c.getClusterName)
+      _ <- sequentially(clusterNames) { clusterName => googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-west1", clusterName))}
     } yield {
       //nah
     }
   }
+  
 
   def createStorageLogsBucket(billingProjectName: String): Future[String] = {
     val bucketName = s"storage-logs-$billingProjectName"
