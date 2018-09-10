@@ -1,7 +1,10 @@
 package org.broadinstitute.dsde.workbench.gpalloc.dao
 
+import java.util.UUID
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
+import cats.data.OptionT
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.auth.oauth2.{GoogleClientSecrets, GoogleCredential}
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
@@ -17,6 +20,7 @@ import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.genomics.GenomicsScopes
 import com.google.api.services.iam.v1.Iam
+import com.google.api.services.dataproc.Dataproc
 import com.google.api.services.iam.v1.model.{ServiceAccount, ServiceAccountKey}
 import com.google.api.services.plus.PlusScopes
 import com.google.api.services.servicemanagement.ServiceManagement
@@ -105,6 +109,11 @@ class HttpGoogleBillingDAO(appName: String,
     new Iam.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
+  def dataproc: Dataproc = {
+    new Dataproc.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
+  }
+
+
   //leaving this floating around because it's useful for debugging
   implicit class DebuggableFuture[T](f: Future[T]) {
     def debug(str: String) = {
@@ -136,6 +145,7 @@ class HttpGoogleBillingDAO(appName: String,
       googleProject <- getGoogleProject(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupPets(projectName)
+      _ <- cleanupClusters(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
       _ <- updateGoogleBillingInfo(projectName, defaultBillingAccount)
     } yield {
@@ -378,6 +388,32 @@ class HttpGoogleBillingDAO(appName: String,
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
       pets = googNull(serviceAccounts.getAccounts).filter(_.getEmail.contains(s"@$projectName.iam.gserviceaccount.com"))
       _ <- sequentially(pets) { pet => googleRq( iam.projects.serviceAccounts.delete(pet.getName) ) }
+    } yield {
+      //nah
+    }
+  }
+
+  def cleanupClusters(projectName: String): Future[Unit] = {
+    for {
+      clusterNames <- listClusters(projectName)
+      _ <- clusterNames.map(clusterName => deleteCluster(projectName, clusterName))
+    } yield {
+      //nah
+    }
+  }
+
+  private def listClusters(projectName: String): Future[List[String]] = {
+    for {
+      result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-west1"))
+      googleClusters <- OptionT.fromOption[Future](Option(result.getClusters))
+    } yield {
+      googleClusters.asScala.toList.map(c => c.getClusterName)
+    }
+  }
+
+  private def deleteCluster(projectName: String, clusterName: String) = {
+    for {
+      _ <- googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-west1", clusterName))
     } yield {
       //nah
     }
