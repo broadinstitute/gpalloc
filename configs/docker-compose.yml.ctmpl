@@ -46,7 +46,7 @@ proxy:
     - app:app
   environment:
     SERVER_ADMIN: dsptechops@broadinstitute.org
-    SERVER_NAME: {{if eq $image "master"}}gpalloc-{{$environment}}{{else}}gpalloc-beta{{end}}.dsp-techops.broadinstute.org
+    SERVER_NAME: {{if eq $image "master"}}gpalloc-{{$environment}}{{else}}gpalloc-beta{{end}}.dsp-techops.broadinstitute.org
     PROXY_URL: http://app:8080/
     SSL_PROTOCOL: "-SSLv2 -SSLv3 -TLSv1 -TLSv1.1 +TLSv1.2"
     LOG_LEVEL: debug
