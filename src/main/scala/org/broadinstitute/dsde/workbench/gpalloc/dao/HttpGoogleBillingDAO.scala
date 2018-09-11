@@ -144,9 +144,9 @@ class HttpGoogleBillingDAO(appName: String,
   override def scrubBillingProject(projectName: String): Future[Unit] = {
     for {
       googleProject <- getGoogleProject(projectName)
+      _ <- cleanupClusters(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupPets(projectName)
-      _ <- cleanupClusters(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
       _ <- updateGoogleBillingInfo(projectName, defaultBillingAccount)
     } yield {
@@ -395,6 +395,7 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
   def cleanupClusters(projectName: String): Future[Unit] = {
+    logger debug s"in cleanup cluster!!"
     for {
       result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-west1"))
       googleClusters = googNull(result.getClusters)
@@ -404,7 +405,7 @@ class HttpGoogleBillingDAO(appName: String,
       //nah
     }
   }
-  
+
 
   def createStorageLogsBucket(billingProjectName: String): Future[String] = {
     val bucketName = s"storage-logs-$billingProjectName"
