@@ -142,6 +142,7 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
   override def scrubBillingProject(projectName: String): Future[Unit] = {
+    logger.debug("scrub a dub dub")
     for {
       googleProject <- getGoogleProject(projectName)
       _ <- cleanupClusters(projectName)
@@ -395,7 +396,7 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
   def cleanupClusters(projectName: String): Future[Unit] = {
-    logger debug s"in cleanup cluster!!"
+    logger.debug("in cleanup cluster!!")
     for {
       result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-west1"))
       googleClusters = googNull(result.getClusters)
