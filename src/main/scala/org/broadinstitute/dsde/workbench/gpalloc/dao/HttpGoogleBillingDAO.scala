@@ -401,9 +401,10 @@ class HttpGoogleBillingDAO(appName: String,
       result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-west1"))
       googleClusters = googNull(result.getClusters)
       clusterNames = googleClusters.map(c => c.getClusterName)
+      //_ <- logger.debug("clusters: " + clusterNames)
       _ <- sequentially(clusterNames) { clusterName => googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-west1", clusterName))}
     } yield {
-      //nah
+      logger.debug("clusters: " + clusterNames)
     }
   }
 
