@@ -402,11 +402,11 @@ class HttpGoogleBillingDAO(appName: String,
 //    val googleClusters = googNull(result.map(_.getClusters))
 
     for {
-      result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-west1"))
+      result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-central1"))
       googleClusters = googNull(result.getClusters)
       clusterNames = googleClusters.map(c => c.getClusterName)
 //      l <- trace(clusterNames)
-      _ <- sequentially(clusterNames) { clusterName => googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-west1", clusterName))}
+      _ <- sequentially(clusterNames) { clusterName => googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-central1", clusterName))}
     } yield {
 //     l
     }
