@@ -412,10 +412,10 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  private def trace(clusterNames: Seq[String]) = {
-    logger.debug("clusters: " + clusterNames)
-    clusterNames
-  }
+//  private def trace(clusterNames: Seq[String]) = {
+//    logger.debug("clusters: " + clusterNames)
+//    clusterNames
+//  }
 
 
   def createStorageLogsBucket(billingProjectName: String): Future[String] = {
