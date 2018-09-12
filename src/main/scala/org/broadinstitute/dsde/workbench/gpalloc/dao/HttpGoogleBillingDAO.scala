@@ -397,15 +397,24 @@ class HttpGoogleBillingDAO(appName: String,
 
   def cleanupClusters(projectName: String): Future[Unit] = {
     logger.debug("in cleanup cluster!!")
+
+//    val result = googleRq(dataproc.projects().regions().clusters().list(projectName, "us-west1"))
+//    val googleClusters = googNull(result.map(_.getClusters))
+
     for {
       result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-west1"))
       googleClusters = googNull(result.getClusters)
       clusterNames = googleClusters.map(c => c.getClusterName)
-      //_ <- logger.debug("clusters: " + clusterNames)
+//      l <- trace(clusterNames)
       _ <- sequentially(clusterNames) { clusterName => googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-west1", clusterName))}
     } yield {
-      logger.debug("clusters: " + clusterNames)
+//     l
     }
+  }
+
+  private def trace(clusterNames: Seq[String]) = {
+    logger.debug("clusters: " + clusterNames)
+    clusterNames
   }
 
 
