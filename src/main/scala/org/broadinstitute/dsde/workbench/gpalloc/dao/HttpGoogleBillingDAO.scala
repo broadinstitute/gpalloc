@@ -1,7 +1,11 @@
 package org.broadinstitute.dsde.workbench.gpalloc.dao
 
+import java.util.UUID
+
 import akka.actor.ActorSystem
+import akka.cluster.Cluster
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
+import cats.data.OptionT
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.auth.oauth2.{GoogleClientSecrets, GoogleCredential}
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
@@ -17,6 +21,7 @@ import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.genomics.GenomicsScopes
 import com.google.api.services.iam.v1.Iam
+import com.google.api.services.dataproc.Dataproc
 import com.google.api.services.iam.v1.model.{ServiceAccount, ServiceAccountKey}
 import com.google.api.services.plus.PlusScopes
 import com.google.api.services.servicemanagement.ServiceManagement
@@ -105,6 +110,11 @@ class HttpGoogleBillingDAO(appName: String,
     new Iam.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
+  def dataproc: Dataproc = {
+    new Dataproc.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
+  }
+
+
   //leaving this floating around because it's useful for debugging
   implicit class DebuggableFuture[T](f: Future[T]) {
     def debug(str: String) = {
@@ -134,6 +144,7 @@ class HttpGoogleBillingDAO(appName: String,
   override def scrubBillingProject(projectName: String): Future[Unit] = {
     for {
       googleProject <- getGoogleProject(projectName)
+      _ <- cleanupClusters(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupPets(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
@@ -382,6 +393,19 @@ class HttpGoogleBillingDAO(appName: String,
       //nah
     }
   }
+
+  // Leonardo currently only creates clusters in the region us-central1. If it were to start supporting other regions, this should be updated. 
+  def cleanupClusters(projectName: String): Future[Unit] = {
+    for {
+      result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-central1"))
+      googleClusters = googNull(result.getClusters)
+      clusterNames = googleClusters.map(c => c.getClusterName)
+      _ <- sequentially(clusterNames) { clusterName => googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-central1", clusterName))}
+    } yield {
+      //nah
+    }
+  }
+
 
   def createStorageLogsBucket(billingProjectName: String): Future[String] = {
     val bucketName = s"storage-logs-$billingProjectName"

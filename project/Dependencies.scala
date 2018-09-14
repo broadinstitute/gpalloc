@@ -1,4 +1,5 @@
-import sbt._
+import Dependencies.{excludeFindbugsJsr, excludeHttpComponent, excludeJacksonCore}
+import sbt.{ExclusionRule, ModuleID, _}
 
 object Dependencies {
   val akkaV         = "2.5.3"
@@ -19,6 +20,11 @@ object Dependencies {
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
   val excludeWorkbenchModel =   ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
+  val excludeJacksonCore        = ExclusionRule(organization = "com.fasterxml.jackson.core", name =  "jackson-core")
+  val excludeFindbugsJsr        = ExclusionRule(organization = "com.google.code.findbugs", name = "jsr305")
+  val excludeHttpComponent      = ExclusionRule(organization = "org.apache.httpcomponents", name = "httpclient")
+
+
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -57,6 +63,7 @@ object Dependencies {
   val liquibase: ModuleID = "org.liquibase"       % "liquibase-core"        % "3.5.3"
 
   val googleBilling: ModuleID = "com.google.apis" % "google-api-services-cloudbilling" % "v1-rev16-1.23.0" excludeAll(excludeGuavaJDK5)
+  val googleDataproc: ModuleID =    "com.google.apis"     % "google-api-services-dataproc" % s"v1-rev91-$googleV" excludeAll(excludeGuavaJDK5, excludeJacksonCore, excludeFindbugsJsr, excludeHttpComponent)
   val googleRpc: ModuleID =               "io.grpc" % "grpc-core" % "1.5.0"
 
   val rootDependencies = Seq(
@@ -92,6 +99,7 @@ object Dependencies {
     workbenchMetrics,
 
     googleBilling,
+    googleDataproc,
     googleRpc,
 
     slick,
