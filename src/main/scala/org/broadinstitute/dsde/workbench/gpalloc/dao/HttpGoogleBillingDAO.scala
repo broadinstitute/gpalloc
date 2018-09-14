@@ -394,6 +394,7 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
+  // Leonardo currently only creates clusters in the region us-central1. If it were to start supporting other regions, this should be updated. 
   def cleanupClusters(projectName: String): Future[Unit] = {
     for {
       result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-central1"))
