@@ -85,7 +85,7 @@ class GPAllocService(protected val dbRef: DbReference,
           logger.info(s"successfully released ${if(becauseAbandoned) "abandoned " else ""}project $project")
         }
         scrub.onComplete {
-          case Failure(e) => logger.error(s"releaseGoogleProject failed for $project because $e")
+          case Failure(e) => logger.error(s"releaseGoogleProject failed for $project", e)
           case Success(_) => //meh
         }
       case Failure(e) =>

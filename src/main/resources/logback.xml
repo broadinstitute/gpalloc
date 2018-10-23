@@ -45,6 +45,12 @@
         <appender-ref ref="Sentry" />
     </logger>
 
+    <logger name="org.broadinstitute.dsde.workbench.google" level="debug" additivity="false">
+        <appender-ref ref="file"/>
+        <appender-ref ref="console"/>
+        <appender-ref ref="SYSLOG"/>
+        <appender-ref ref="Sentry" />
+    </logger>
 
     <logger name="akka" level="info" additivity="false">
         <appender-ref ref="file"/>
