@@ -1,20 +1,18 @@
 # allo, gator
 
-Makes creating billing projects snappy
-
-## Using GPAlloc
+Makes creating billing projects snappy!
 
 For instructions on how to use GPAlloc to provide you with Google projects, see [here](USAGE.md).
 
 If you need help debugging GPAlloc-related errors, see [here](HELP.md).
 
-## Developing GPAlloc
+# Developing GPAlloc
 
 There are three GPAlloc instances, all of which live in the `broad-dsp-techops` Google project.
 
-### Instances
+## Instances
 
-#### Instances for use in tests
+### Instances for use in tests
 
 The two "production" instances of GPAlloc are:
 
@@ -30,11 +28,11 @@ The two "production" instances of GPAlloc are:
 
 Remember: despite a name that might indicate otherwise, **gpalloc-dev is a real instance used by our test environment. It is not for unreleased code.**
 
-#### Instances for GPAlloc developers
+### Instances for GPAlloc developers
 
 https://gpalloc-beta.dsp-techops.broadinstitute.org/ is the "developer" instance. At any given point in time it probably has recent-ish code on it, but you should ssh to the host and run `sudo docker ps` to find out.
 
-### Development process
+## Development process
 
 The conventions for developing on GPAlloc are a little different to what you're used to. The process goes as follows (the complicated steps will be outlined below, hold your horses):
 
@@ -47,7 +45,7 @@ The conventions for developing on GPAlloc are a little different to what you're 
 7. While you're waiting, make a new release in GitHub.
 8. Run the gpalloc-deploy Jenkins job to deploy to the "production" instances.
 
-#### Getting started
+### Getting started
 
 Clone and go into the repo:
 ```
@@ -68,7 +66,7 @@ Once you're done, tear down MySQL:
 ./docker/run-mysql.sh stop gpalloc
 ```
 
-#### Development cycle
+### Development cycle
 
 Note that the git branch name is used in the created project names, so  
 
@@ -91,11 +89,11 @@ Finally, run [gpalloc-instance-deploy](https://fc-jenkins.dsp-techops.broadinsti
 
 You can then test your code on gpalloc-beta and repeat this cycle as needed.
 
-#### Watching CircleCI for auto-builds of `develop` and `master`
+### Watching CircleCI for auto-builds of `develop` and `master`
 
 [CircleCI](https://circleci.com/gh/broadinstitute/gpalloc) builds Docker images for the `develop` and `master` branches of this repository on commits to those branches. Click the link to look at it.
 
-#### Making a new release in GitHub
+### Making a new release in GitHub
 
 Go to the [Releases](https://github.com/broadinstitute/gpalloc/releases) page in GitHub. Hit "Draft a new release". It should look like this:
 
@@ -107,19 +105,19 @@ Note that:
 
 This doesn't do anything per se, but it serves as a record of what got released and when.
 
-#### Deploying the `master` branch to gpalloc-dev and gpalloc-qa
+### Deploying the `master` branch to gpalloc-dev and gpalloc-qa
 
 Again, use the [gpalloc-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/) Jenkins job for this. This time, select `image=master`. This will deploy to _both_ gpalloc-dev and gpalloc-qa.
 
-### Miscellaneous things
+## Miscellaneous things
 
-#### Deploying the `develop` branch to gpalloc-beta
+### Deploying the `develop` branch to gpalloc-beta
 
 We don't really have a "dev" environment of GPAlloc; gpalloc-beta is "scratch space for devs" and gpalloc-dev and gpalloc-qa are "production" instances for their respective Firecloud test domains. However, if you ever want to deploy whatever's on `develop` to gpalloc-beta, you can do that with the [gpalloc-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/) Jenkins job.
 
 To deploy the `develop` Docker image to the `-beta` instance, select `image=develop`.
 
-#### Manually deploying to gpalloc-beta
+### Manually deploying to gpalloc-beta
 
 This is deeply shenanigans and you shouldn't need do it, but it can be quicker if you're making rapid changes. (Caveat: you're unlikely to have SSH access to the machine, and Bernick probably won't give it to you.)
 
