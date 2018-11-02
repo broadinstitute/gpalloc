@@ -107,7 +107,7 @@ This doesn't do anything per se, but it serves as a record of what got released 
 
 ### Deploying the `master` branch to gpalloc-dev and gpalloc-qa
 
-Again, use the [gpalloc-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/) Jenkins job for this. This time, select `image=master`. This will deploy to _both_ gpalloc-dev and gpalloc-qa.
+Use the [gpalloc-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/) Jenkins job for this. This time, select `image=master`. This will deploy to _both_ gpalloc-dev and gpalloc-qa.
 
 ## Miscellaneous things
 
