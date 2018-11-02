@@ -8,9 +8,9 @@ If you need help debugging GPAlloc-related errors, see [here](HELP.md).
 
 # Developing GPAlloc
 
-There are three GPAlloc instances, all of which live in the `broad-dsp-techops` Google project.
-
 ## Instances
+
+There are three GPAlloc instances, all of which live in the `broad-dsp-techops` Google project.
 
 ### Instances for use in tests
 
