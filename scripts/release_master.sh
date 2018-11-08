@@ -6,7 +6,7 @@ echo "If you really want to do this, type the word \"release\" and hit [ENTER]:"
 
 read release
 
-if [ $release = "release" ];
+if [ "$release" = "release" ];
 then
 	git push origin develop:master --force
 else
