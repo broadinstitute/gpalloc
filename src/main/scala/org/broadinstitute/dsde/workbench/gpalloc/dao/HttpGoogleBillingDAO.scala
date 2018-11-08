@@ -9,6 +9,7 @@ import cats.data.OptionT
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.auth.oauth2.{GoogleClientSecrets, GoogleCredential}
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
 import com.google.api.client.http.HttpResponseException
 import com.google.api.client.json.jackson2.JacksonFactory
@@ -367,11 +368,21 @@ class HttpGoogleBillingDAO(appName: String,
     for {
       oAcls <- googleRq( storage.defaultObjectAccessControls.list(bucketName) )
       deleteOAcls = oAcls.getItems.asScala.filter(a => shouldDeleteBucketACL(a.getEntity))
-      _ <- sequentially(deleteOAcls) { d => googleRq(storage.defaultObjectAccessControls.delete(bucketName, d.getEntity)) }
+      _ <- sequentially(deleteOAcls) { d =>
+        googleRq(storage.defaultObjectAccessControls.delete(bucketName, d.getEntity)).recover {
+          // ignore any errors where the group is already gone
+          case ge: GoogleJsonResponseException if ge.getStatusCode == 400 && ge.getMessage.contains("Could not find group") =>
+        }
+      }
 
       bAcls <- googleRq( storage.bucketAccessControls.list(bucketName) )
       deleteBAcls = bAcls.getItems.asScala.filter(a => shouldDeleteBucketACL(a.getEntity))
-      _ <- sequentially(deleteBAcls) { d => googleRq(storage.bucketAccessControls.delete(bucketName, d.getEntity)) }
+      _ <- sequentially(deleteBAcls) { d =>
+        googleRq(storage.bucketAccessControls.delete(bucketName, d.getEntity)).recover {
+          // ignore any errors where the group is already gone
+          case ge: GoogleJsonResponseException if ge.getStatusCode == 400 && ge.getMessage.contains("Could not find group") =>
+        }
+      }
     } yield {
       //nah
     }
@@ -400,7 +411,12 @@ class HttpGoogleBillingDAO(appName: String,
       result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-central1"))
       googleClusters = googNull(result.getClusters)
       clusterNames = googleClusters.map(c => c.getClusterName)
-      _ <- sequentially(clusterNames) { clusterName => googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-central1", clusterName))}
+      _ <- sequentially(clusterNames) { clusterName =>
+        googleRq(dataproc.projects().regions().clusters().delete(projectName, "us-central1", clusterName)).recover {
+          // ignore errors on already deleting clusters
+          case ge: GoogleJsonResponseException if ge.getStatusCode == 400 && ge.getMessage.contains("while it has other pending delete operations") =>
+        }
+      }
     } yield {
       //nah
     }
