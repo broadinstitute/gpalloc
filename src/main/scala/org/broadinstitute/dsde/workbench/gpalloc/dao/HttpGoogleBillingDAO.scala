@@ -430,7 +430,6 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
 
-  def createStorageLogsBucket(billingProjectName: String): Future[String] = {
   protected def createStorageLogsBucket(billingProjectName: String): Future[String] = {
     val bucketName = s"storage-logs-$billingProjectName"
     logger debug s"storage log bucket: $bucketName"
