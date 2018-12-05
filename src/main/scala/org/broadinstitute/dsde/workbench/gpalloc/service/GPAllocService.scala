@@ -153,6 +153,8 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   private def createNewGoogleProject(): Unit = {
-    projectCreationSupervisor ! RequestNewProject(s"${gpAllocConfig.projectPrefix}-${Random.alphanumeric.take(7).mkString.toLowerCase}")
+    //strip out things GCP doesn't like in project IDs: uppercase, underscores, and things that are too long
+    val sanitizedPrefix = gpAllocConfig.projectPrefix.toLowerCase.replaceAll("[^a-z0-9-]", "").take(22)
+    projectCreationSupervisor ! RequestNewProject(s"$sanitizedPrefix-${Random.alphanumeric.take(7).mkString.toLowerCase}")
   }
 }
