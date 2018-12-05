@@ -153,6 +153,6 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   private def createNewGoogleProject(): Unit = {
-    projectCreationSupervisor ! RequestNewProject(s"${gpAllocConfig.projectPrefix}-${Random.alphanumeric.take(7).mkString.toLowerCase}")
+    projectCreationSupervisor ! RequestNewProject(s"${gpAllocConfig.projectPrefix}".take(22) + s"-${Random.alphanumeric.take(7).mkString.toLowerCase}")
   }
 }
