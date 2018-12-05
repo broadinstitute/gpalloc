@@ -70,7 +70,7 @@ Once you're done, tear down MySQL:
 
 Note that the git branch name is used in the created project names, so  
 
-a) don't make it too long  
+a) don't make it too long -- 9 characters maximum 
 b) **don't put an underscore in it**.  
 
 Otherwise Google won't let you create the project (name too long or contains invalid characters).
