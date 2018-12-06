@@ -168,13 +168,17 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   //create new google project if we don't have any available
-  private def maybeCreateNewProjects(): Unit = {
-    dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map {
-      case count if count < gpAllocConfig.minimumFreeProjects =>
-        (1 to (gpAllocConfig.minimumFreeProjects-count)) foreach { _ =>
-          createNewGoogleProject()
-        }
-      case _ => //do nothing
+  private def maybeCreateNewProjects(): Future[Unit] = {
+    dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map { count =>
+      if (count < gpAllocConfig.minimumFreeProjects) {
+        val create = Future{ createNewGoogleProject() }
+        create.onComplete {
+          case Failure(e) => logger.error(s"creation of project failed because $e")
+          case Success(_) => maybeCreateNewProjects()
+         }
+        create
+      }
+      else Future.successful(())
     }
   }
 

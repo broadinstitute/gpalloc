@@ -93,8 +93,9 @@ class ProjectCreationMonitor(projectName: String,
 
   def createNewProject: Future[ProjectCreationMonitorMessage] = {
     for {
+      _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNew(projectName, BillingProjectStatus.CreatingProject) }
       newOperationRec <- googleDAO.createProject(projectName, billingAccount)
-      _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNewProject(projectName, newOperationRec) }
+      _ <- dbRef.inTransaction { da => da.operationQuery.saveNewOperations(Seq(newOperationRec)) }
     } yield {
       logger.info(s"Create request submitted for $projectName.")
       PollForStatus(CreatingProject)

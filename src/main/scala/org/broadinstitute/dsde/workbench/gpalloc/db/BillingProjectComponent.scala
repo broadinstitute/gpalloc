@@ -81,7 +81,7 @@ trait BillingProjectComponent extends GPAllocComponent {
       findUnassignedProjects.result
     }
 
-    private[db] def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
+    def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
       (billingProjectQuery += BillingProjectRecord(billingProject, None, status, None)) map { _ =>
         billingProject
       }
