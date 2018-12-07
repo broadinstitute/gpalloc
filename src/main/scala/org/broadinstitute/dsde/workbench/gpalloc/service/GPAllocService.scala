@@ -169,7 +169,7 @@ class GPAllocService(protected val dbRef: DbReference,
     } yield ()
     nukeAll.onComplete {
       case _ => {
-        logger.info(s"successful nukeAll. Creating projects back up the minimum.")
+        logger.info(s"successful nukeAll. Creating projects back up to the minimum.")
         maybeCreateNewProjects()
       }
     }
