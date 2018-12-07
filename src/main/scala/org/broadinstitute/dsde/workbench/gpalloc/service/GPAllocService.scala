@@ -142,33 +142,36 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   def nukeProject(project: String, deleteInGoogle: Boolean = true): Future[Unit] = {
-    nukeProjectInternal(project, deleteInGoogle) {  maybeCreateNewProjects()  }
+    val nuke = nukeProjectInternal(project, deleteInGoogle)
+    nuke.onComplete {
+      case Failure(e) => logger.error(s"surprise error nuking project $project because $e")
+      case Success(_) => {
+        logger.info(s"successful nukeProject of $project")
+        maybeCreateNewProjects()
+      }
+    }
+    nuke
   }
 
-  private def nukeProjectInternal(project: String, deleteInGoogle:Boolean = true)(op: => Unit): Future[Unit] = {
+  private def nukeProjectInternal(project: String, deleteInGoogle:Boolean = true): Future[Unit] = {
     logger.info(s"attempting nuke of project $project")
-    val nuke = for {
+    for {
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.deleteProject(project) }
       _ <- if(deleteInGoogle) googleBillingDAO.deleteProject(project) else Future.successful(())
     } yield ()
-    nuke.onComplete {
-      case Failure(e) =>
-        logger.error(s"surprise error nuking project $project because $e")
-      case Success(_) =>
-        logger.info(s"successful nukeProject of $project")
-        op
-    }
-    nuke
   }
 
   def nukeAllProjects(deleteInGoogle: Boolean = true): Future[Unit] = {
     logger.info("nuking all projects")
     val nukeAll = for {
       allProjects <- dbRef.inTransaction { da => da.billingProjectQuery.listEverything() }
-      _ <- Future.traverse(allProjects) { rec => nukeProjectInternal(rec.billingProjectName, deleteInGoogle)(()) }
+      _ <- Future.traverse(allProjects) { rec => nukeProjectInternal(rec.billingProjectName, deleteInGoogle) }
     } yield ()
     nukeAll.onComplete {
-      case _ => maybeCreateNewProjects()
+      case _ => {
+        logger.info(s"successful nukeAll. Creating projects back up the minimum.")
+        maybeCreateNewProjects()
+      }
     }
     //run the above future in the background because it's gonna take a while
     Future.successful(())
