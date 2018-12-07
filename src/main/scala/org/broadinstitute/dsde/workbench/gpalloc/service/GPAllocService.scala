@@ -142,6 +142,10 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   def nukeProject(project: String, deleteInGoogle: Boolean = true): Future[Unit] = {
+    nukeProjectInternal(project, deleteInGoogle) {  maybeCreateNewProjects()  }
+  }
+
+  private def nukeProjectInternal(project: String, deleteInGoogle:Boolean = true)(op: => Unit): Future[Unit] = {
     logger.info(s"attempting nuke of project $project")
     val nuke = for {
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.deleteProject(project) }
@@ -152,33 +156,32 @@ class GPAllocService(protected val dbRef: DbReference,
         logger.error(s"surprise error nuking project $project because $e")
       case Success(_) =>
         logger.info(s"successful nukeProject of $project")
-        maybeCreateNewProjects()
+        op
     }
     nuke
   }
 
   def nukeAllProjects(deleteInGoogle: Boolean = true): Future[Unit] = {
     logger.info("nuking all projects")
-    for {
+    val nukeAll = for {
       allProjects <- dbRef.inTransaction { da => da.billingProjectQuery.listEverything() }
-      _ <- Future.traverse(allProjects) { rec => nukeProject(rec.billingProjectName, deleteInGoogle) }
+      _ <- Future.traverse(allProjects) { rec => nukeProjectInternal(rec.billingProjectName, deleteInGoogle)(()) }
     } yield ()
+    nukeAll.onComplete {
+      case _ => maybeCreateNewProjects()
+    }
     //run the above future in the background because it's gonna take a while
     Future.successful(())
   }
 
   //create new google project if we don't have any available
-  private def maybeCreateNewProjects(): Future[Unit] = {
-    dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map { count =>
-      if (count < gpAllocConfig.minimumFreeProjects) {
-        val create = Future{ createNewGoogleProject() }
-        create.onComplete {
-          case Failure(e) => logger.error(s"creation of project failed because $e")
-          case Success(_) => maybeCreateNewProjects()
-         }
-        create
-      }
-      else Future.successful(())
+  private def maybeCreateNewProjects(): Unit = {
+    dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map {
+      case count if count < gpAllocConfig.minimumFreeProjects =>
+        (1 to (gpAllocConfig.minimumFreeProjects - count)) foreach { _ =>
+          createNewGoogleProject()
+        }
+      case _ => //do nothing
     }
   }
 
