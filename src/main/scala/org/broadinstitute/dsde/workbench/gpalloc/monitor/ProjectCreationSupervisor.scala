@@ -75,7 +75,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
     system.scheduler.scheduleOnce(gpAllocConfig.abandonmentSweepInterval, self, SweepAbandonedProjects)
   }
 
-  def requestNewProject(projectName: String): Unit = {
+  def requestNewProject(projectName: String): Future[Unit] = {
     projectCreationThrottler.throttle( () => Future.successful(createProject(projectName)) )
   }
 

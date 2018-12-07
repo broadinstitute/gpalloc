@@ -81,7 +81,7 @@ trait BillingProjectComponent extends GPAllocComponent {
       findUnassignedProjects.result
     }
 
-    private[db] def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
+    def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
       (billingProjectQuery += BillingProjectRecord(billingProject, None, status, None)) map { _ =>
         billingProject
       }
@@ -168,6 +168,13 @@ trait BillingProjectComponent extends GPAllocComponent {
         .filter(_.status === BillingProjectStatus.Assigned.toString)
         .map(bp => (bp.owner, bp.status, bp.lastAssignedTime))
         .update(None, BillingProjectStatus.Unassigned.toString, BillingProjectRecord.tsToDB(None))
+    }
+
+    //Entirely forgets that this project ever existed.
+    def deleteProject(billingProject: String): DBIO[Int] = {
+      operationQuery.deleteOpsForProject(billingProject) flatMap { _ =>
+        findBillingProject(billingProject).delete
+      }
     }
 
     def listEverything(): DBIO[Seq[BillingProjectRecord]] = {

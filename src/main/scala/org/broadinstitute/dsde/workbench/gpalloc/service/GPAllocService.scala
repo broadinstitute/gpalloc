@@ -141,11 +141,47 @@ class GPAllocService(protected val dbRef: DbReference,
     Future.successful(())
   }
 
+  def nukeProject(project: String, deleteInGoogle: Boolean = true): Future[Unit] = {
+    val nuke = nukeProjectInternal(project, deleteInGoogle)
+    nuke.onComplete {
+      case Failure(e) => logger.error(s"surprise error nuking project $project because $e")
+      case Success(_) => {
+        logger.info(s"successful nukeProject of $project")
+        maybeCreateNewProjects()
+      }
+    }
+    nuke
+  }
+
+  private def nukeProjectInternal(project: String, deleteInGoogle:Boolean = true): Future[Unit] = {
+    logger.info(s"attempting nuke of project $project")
+    for {
+      _ <- dbRef.inTransaction { da => da.billingProjectQuery.deleteProject(project) }
+      _ <- if(deleteInGoogle) googleBillingDAO.deleteProject(project) else Future.successful(())
+    } yield ()
+  }
+
+  def nukeAllProjects(deleteInGoogle: Boolean = true): Future[Unit] = {
+    logger.info("nuking all projects")
+    val nukeAll = for {
+      allProjects <- dbRef.inTransaction { da => da.billingProjectQuery.listEverything() }
+      _ <- Future.traverse(allProjects) { rec => nukeProjectInternal(rec.billingProjectName, deleteInGoogle) }
+    } yield ()
+    nukeAll.onComplete {
+      case _ => {
+        logger.info(s"successful nukeAll. Creating projects back up to the minimum.")
+        maybeCreateNewProjects()
+      }
+    }
+    //run the above future in the background because it's gonna take a while
+    Future.successful(())
+  }
+
   //create new google project if we don't have any available
   private def maybeCreateNewProjects(): Unit = {
     dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map {
       case count if count < gpAllocConfig.minimumFreeProjects =>
-        (1 to (gpAllocConfig.minimumFreeProjects-count)) foreach { _ =>
+        (1 to (gpAllocConfig.minimumFreeProjects - count)) foreach { _ =>
           createNewGoogleProject()
         }
       case _ => //do nothing
