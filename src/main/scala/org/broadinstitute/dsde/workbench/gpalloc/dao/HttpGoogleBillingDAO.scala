@@ -223,7 +223,7 @@ class HttpGoogleBillingDAO(appName: String,
 
     val serviceManager = servicesManager
 
-    val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component")
+    val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component", "cloudkms.googleapis.com")
 
     def enableGoogleService(service: String) = {
       retryWhen500orGoogleError(() => {
