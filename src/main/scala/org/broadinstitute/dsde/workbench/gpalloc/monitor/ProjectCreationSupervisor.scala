@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
-import akka.actor.{Actor, ActorRef, PoisonPill, Props, SupervisorStrategy}
+import akka.actor.SupervisorStrategy.Restart
+import akka.actor.{Actor, ActorRef, OneForOneStrategy, PoisonPill, Props, SupervisorStrategy}
 import akka.contrib.throttle.TimerBasedThrottler
 import akka.contrib.throttle.Throttler.{RateInt, SetTarget}
 import com.typesafe.scalalogging.LazyLogging
@@ -57,8 +58,8 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
       sweepAssignedProjects()
   }
 
-  //if a project creation monitor dies, give up on it
-  override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
+  //if a project creation monitor dies, restart it
+  override val supervisorStrategy: SupervisorStrategy = OneForOneStrategy() { case _ => Restart }
 
   val monitorNameBase = "bpmon-"
   def monitorName(bp: String) = s"$monitorNameBase$bp"
