@@ -19,6 +19,8 @@ import com.google.api.services.cloudbilling.Cloudbilling
 import com.google.api.services.cloudbilling.model.ProjectBillingInfo
 import com.google.api.services.cloudresourcemanager.CloudResourceManager
 import com.google.api.services.cloudresourcemanager.model.{Binding, Project, SetIamPolicyRequest, Operation => CRMOperation}
+import com.google.api.services.deploymentmanager.model.{ConfigFile, Deployment, ImportFile, TargetConfiguration}
+import com.google.api.services.deploymentmanager.DeploymentManagerV2Beta
 import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.genomics.GenomicsScopes
@@ -40,17 +42,44 @@ import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, Billing
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService, Histogram}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
+import spray.json.JsValue
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future, blocking}
+import scala.util.matching.Regex
 import scala.util.{Failure, Success}
+
+case class Resources (
+                       name: String,
+                       `type`: String,
+                       properties: Map[String, JsValue]
+                     )
+case class ConfigContents (
+                            resources: Seq[Resources]
+                          )
+
+//we're not using camelcase here because these become GCS labels, which all have to be lowercase.
+case class TemplateLocation(
+                             template_org: String,
+                             template_repo: String,
+                             template_branch: String,
+                             template_path: String
+                           )
+
+object DeploymentManagerJsonSupport {
+  import spray.json.DefaultJsonProtocol._
+  implicit val resourceJsonFormat = jsonFormat3(Resources)
+  implicit val configContentsJsonFormat = jsonFormat1(ConfigContents)
+  implicit val templateLocationJsonFormat = jsonFormat4(TemplateLocation)
+}
 
 class HttpGoogleBillingDAO(appName: String,
                            serviceAccountPemFile: String,
                            billingPemEmail: String,
                            billingEmail: String,
                            defaultBillingAccount: String,
+                           deploymentMgrProject: String,
                            opsThrottle: Int,
                            opsThrottlePerDuration: FiniteDuration)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
@@ -116,6 +145,10 @@ class HttpGoogleBillingDAO(appName: String,
     new Dataproc.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
+  def deploymentManager: DeploymentManagerV2Beta = {
+    new DeploymentManagerV2Beta.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
+  }
+
 
   //leaving this floating around because it's useful for debugging
   implicit class DebuggableFuture[T](f: Future[T]) {
@@ -156,58 +189,90 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  //poll google for what's going on
   override def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
-
-    // this code is a colossal DRY violation but because the operations collection is different
-    // for cloudResManager and servicesManager and they return different but identical Status objects
-    // there is not much else to be done... too bad scala does not have duck typing.
-    operation.operationType match {
-      case CreatingProject =>
-        opThrottler.throttle(() => retryWithRecoverWhen500orGoogleError(() => {
-          executeGoogleRequest(cloudResources.operations().get(operation.operationId))
-        }) {
-          case t: HttpResponseException if t.getStatusCode == 429 =>
-            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
-            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
-            new CRMOperation().setDone(false).setError(null)
-        }).map { op =>
-          operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
-        }
-
-      case EnablingServices =>
-        opThrottler.throttle(() => retryWithRecoverWhen500orGoogleError(() => {
-          executeGoogleRequest(servicesManager.operations().get(operation.operationId))
-        }) {
-          case t: HttpResponseException if t.getStatusCode == 429 =>
-            //429 is Too Many Requests. If we get this back, just say we're not done yet and try again later
-            logger.warn(s"Google 429 for pollOperation ${operation.billingProjectName} ${operation.operationType}. Retrying next round...")
-            new SMOperation().setDone(false).setError(null)
-        }).map { op =>
-          operation.copy(done = toScalaBool(op.getDone), errorMessage = Option(op.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
-        }
+    retryWhen500orGoogleError(() => {
+      executeGoogleRequest(deploymentManager.operations().get(deploymentMgrProject, operation.operationId))
+    }).map { op =>
+      val errorStr = Option(op.getError).map(errors => errors.getErrors.asScala.map(e => toErrorMessage(e.getMessage, e.getCode)).mkString("\n"))
+      operation.copy(done = op.getStatus == "DONE", errorMessage = errorStr)
     }
   }
 
   case class GoogleProjectConflict(projectName: String)
     extends GPAllocException(s"A google project by the name $projectName already exists", StatusCodes.Conflict)
 
-  //part 1
-  override def createProject(projectName: String, billingAccount: String): Future[ActiveOperationRecord] = {
+  def getDMConfigYamlString(projectName: String, dmTemplatePath: String, properties: Map[String, JsValue]): String = {
+    import DeploymentManagerJsonSupport._
+    import cats.syntax.either._
+    import io.circe.yaml._
+    import io.circe.yaml.syntax._
+
+    val configContents = ConfigContents(Seq(Resources(projectName, dmTemplatePath, properties)))
+    val jsonVersion = io.circe.jawn.parse(configContents.toJson.toString).valueOr(throw _)
+    jsonVersion.asYaml.spaces2
+  }
+
+  /*
+ * Set the deployment policy to "abandon" -- i.e. allows the created project to persist even if the deployment is deleted --
+ * and then delete the deployment. There's a limit of 1000 deployments so this is important to do.
+ */
+  override def cleanupDMProject(projectName: String): Future[Unit] = {
+    if( cleanupDeploymentAfterCreating ) {
+      executeGoogleRequest(
+        deploymentManager.deployments().delete(deploymentMgrProject, projectToDM(projectName)).setDeletePolicy("ABANDON")).void
+    } else {
+      Future.successful(())
+    }
+  }
+
+  def projectToDM(projectName: String) = s"dm-$projectName"
+
+
+  def parseTemplateLocation(path: String): Option[TemplateLocation] = {
+    val rx: Regex = "https://raw.githubusercontent.com/(.*)/(.*)/(.*)/(.*)".r
+    rx.findAllMatchIn(path).toList.headOption map { groups =>
+      TemplateLocation(
+        labelSafeString(groups.subgroups(0), ""),
+        labelSafeString(groups.subgroups(1), ""),
+        labelSafeString(groups.subgroups(2), ""),
+        labelSafeString(groups.subgroups(3), ""))
+    }
+  }
+
+  override def createProject(projectName: String, billingAccountId: String, billingAccountDisplayName: String, dmTemplatePath: String, requesterPaysRole: String, ownerGroupEmail: String, computeUserGroupEmail: String, projectTemplate: ProjectTemplate): Future[RawlsBillingProjectOperationRecord] = {
+    import spray.json._
+    import spray.json.DefaultJsonProtocol._
+    import DeploymentManagerJsonSupport._
+
+    val templateLabels = parseTemplateLocation(dmTemplatePath).map(_.toJson).getOrElse(Map("template_path" -> labelSafeString(dmTemplatePath)).toJson)
+
+    val properties = Map (
+      "billingAccountId" -> billingAccountId.toJson,
+      "billingAccountFriendlyName" -> billingAccountDisplayName.toJson,
+      "projectId" -> projectName.toJson,
+      "parentOrganization" -> orgID.toJson,
+      "fcBillingGroup" -> billingGroupEmail.toJson,
+      "projectOwnersGroup" -> ownerGroupEmail.value.toJson,
+      "projectViewersGroup" -> computeUserGroupEmail.value.toJson,
+      "requesterPaysRole" -> requesterPaysRole.toJson,
+      "highSecurityNetwork" -> false.toJson,
+      "fcProjectOwners" -> projectTemplate.owners.toJson,
+      "fcProjectEditors" -> projectTemplate.editors.toJson,
+      "labels" -> templateLabels
+    )
+
+    //a list of one resource: type=composite-type, name=whocares, properties=pokein
+    val yamlConfig = new ConfigFile().setContent(getDMConfigYamlString(projectName, dmTemplatePath, properties))
+    val deploymentConfig = new TargetConfiguration().setConfig(yamlConfig)
+
     retryWhen500orGoogleError(() => {
-      executeGoogleRequest(cloudResources.projects().create(
-        new Project()
-          .setName(projectName)
-          .setProjectId(projectName)))
-    }).recover {
-      case t: HttpResponseException if StatusCode.int2StatusCode(t.getStatusCode) == StatusCodes.Conflict =>
-        throw GoogleProjectConflict(projectName)
-    } map ( googleOperation => {
-      if (toScalaBool(googleOperation.getDone) && Option(googleOperation.getError).exists(_.getCode == Code.ALREADY_EXISTS.value())) {
-        throw GoogleProjectConflict(projectName)
+      executeGoogleRequest {
+        deploymentManager.deployments().insert(deploymentMgrProject, new Deployment().setName(projectToDM(projectName)).setTarget(deploymentConfig))
       }
-      ActiveOperationRecord(projectName, CreatingProject, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
-    })
+    }) map { googleOperation =>
+      val errorStr = Option(googleOperation.getError).map(errors => errors.getErrors.asScala.map(e => toErrorMessage(e.getMessage, e.getCode)).mkString("\n"))
+      ActiveOperationRecord(projectName, CreatingProject, googleOperation.getName, toScalaBool(googleOperation.status == "DONE"), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+    }
   }
 
   /**
@@ -219,61 +284,8 @@ class HttpGoogleBillingDAO(appName: String,
     s"${Option(message).getOrElse("")} - code ${code}"
   }
 
-  // part 2
-  override def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
-
-    val serviceManager = servicesManager
-
-    val services = Seq("autoscaler", "bigquery", "clouddebugger", "container", "compute_component", "dataflow.googleapis.com", "dataproc", "deploymentmanager", "genomics", "logging.googleapis.com", "replicapool", "replicapoolupdater", "resourceviews", "sql_component", "storage_api", "storage_component", "cloudkms.googleapis.com")
-
-    def enableGoogleService(service: String) = {
-      retryWhen500orGoogleError(() => {
-        executeGoogleRequest(serviceManager.services().enable(service, new EnableServiceRequest().setConsumerId(s"project:${projectName}")))
-      }) map { googleOperation =>
-        ActiveOperationRecord(projectName, EnablingServices, googleOperation.getName, toScalaBool(googleOperation.getDone), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
-      }
-    }
-
-    // all of these things should be idempotent
-    for {
-    // set the billing account
-      _ <- updateGoogleBillingInfo(projectName, billingAccount)
-
-      // enable appropriate google apis
-      operations <- opThrottler.sequence(services.map { service => { () => enableGoogleService(service) } })
-
-    } yield {
-      operations
-    }
-  }
-
-  //part 3
-  override def setupProjectBucketAccess(projectName: String): Future[Unit] = {
-    val usageBucketName = s"${projectName}-usage-export"
-
-    // all of these things should be idempotent
-    for {
-    // create project usage export bucket
-      exportBucket <- retryWithRecoverWhen500orGoogleError(() => {
-        val bucket = new Bucket().setName(usageBucketName)
-        executeGoogleRequest(storage.buckets.insert(projectName, bucket))
-      }) { case t: HttpResponseException if t.getStatusCode == 409 => new Bucket().setName(usageBucketName) }
-
-      // create bucket for workspace bucket storage/usage logs
-      storageLogsBucket <- createStorageLogsBucket(projectName)
-      _ <- retryWhen500orGoogleError(() => { allowGoogleCloudStorageWrite(storageLogsBucket) })
-
-      googleProject <- getGoogleProject(projectName)
-
-      cromwellAuthBucket <- createCromwellAuthBucket(projectName, googleProject.getProjectNumber)
-
-      _ <- retryWhen500orGoogleError(() => {
-        val usageLoc = new UsageExportLocation().setBucketName(usageBucketName).setReportNamePrefix("usage")
-        executeGoogleRequest(computeManager.projects().setUsageExportBucket(projectName, usageLoc))
-      })
-    } yield {
-      // nothing
-    }
+  private def toErrorMessage(message: String, code: String): String = {
+    s"${Option(message).getOrElse("")} - code ${code}"
   }
 
   //part ways

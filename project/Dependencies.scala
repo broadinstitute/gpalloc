@@ -64,6 +64,7 @@ object Dependencies {
 
   val googleBilling: ModuleID = "com.google.apis" % "google-api-services-cloudbilling" % "v1-rev16-1.23.0" excludeAll(excludeGuavaJDK5)
   val googleDataproc: ModuleID =    "com.google.apis"     % "google-api-services-dataproc" % s"v1-rev91-$googleV" excludeAll(excludeGuavaJDK5, excludeJacksonCore, excludeFindbugsJsr, excludeHttpComponent)
+  val googleDeploymentManager: ModuleID = "com.google.apis"   % "google-api-services-deploymentmanager" % ("v2beta-rev20181207-1.28.0")
   val googleRpc: ModuleID =               "io.grpc" % "grpc-core" % "1.5.0"
 
   val rootDependencies = Seq(
@@ -100,6 +101,7 @@ object Dependencies {
 
     googleBilling,
     googleDataproc,
+    googleDeploymentManager,
     googleRpc,
 
     slick,
