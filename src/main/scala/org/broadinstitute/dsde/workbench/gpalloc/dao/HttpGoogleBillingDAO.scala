@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc.dao
 
+import java.io.IOException
 import java.util.UUID
 
 import akka.actor.ActorSystem
@@ -37,12 +38,12 @@ import org.broadinstitute.dsde.workbench.gpalloc.db.ActiveOperationRecord
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus, GPAllocException}
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
-import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService}
+import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService, Histogram}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.util.{Failure, Success}
 
 class HttpGoogleBillingDAO(appName: String,
@@ -402,11 +403,33 @@ class HttpGoogleBillingDAO(appName: String,
   //dear god, google. surely there's a better way
   def gProjectPath(project: String) = s"projects/$project"
 
+
+  protected def when500orGoogleErrorButNot404(throwable: Throwable): Boolean = {
+    throwable match {
+      case t: GoogleJsonResponseException => {
+        ((t.getStatusCode == 403 || t.getStatusCode == 429) && t.getDetails.getErrors.asScala.head.getDomain.equalsIgnoreCase("usageLimits")) ||
+          (t.getStatusCode == 400 && t.getDetails.getErrors.asScala.head.getReason.equalsIgnoreCase("invalid")) ||
+          t.getStatusCode/100 == 5
+      }
+      case t: HttpResponseException => t.getStatusCode/100 == 5
+      case ioe: IOException => true
+      case _ => false
+    }
+  }
+
+  protected def retryForPetDeletion[T](op: () => T)(implicit histo: Histogram): Future[T] = {
+    retryExponentially(when500orGoogleErrorButNot404)(() => Future(blocking(op())))
+  }
+
+  protected def petGoogleRq[T](op: AbstractGoogleClientRequest[T]) = {
+    retryForPetDeletion(() => executeGoogleRequest(op))
+  }
+
   protected def cleanupPets(projectName: String): Future[Unit] = {
     for {
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
       pets = googNull(serviceAccounts.getAccounts).filter(_.getEmail.contains(s"@$projectName.iam.gserviceaccount.com"))
-      _ <- sequentially(pets) { pet => googleRq( iam.projects.serviceAccounts.delete(pet.getName) ) }
+      _ <- sequentially(pets) { pet => petGoogleRq( iam.projects.serviceAccounts.delete(pet.getName) ) }
     } yield {
       //nah
     }
