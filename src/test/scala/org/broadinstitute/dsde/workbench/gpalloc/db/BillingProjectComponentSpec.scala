@@ -45,8 +45,8 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
 
   it should "update status manually" in isolatedDbTest {
     dbFutureValue { _.billingProjectQuery.saveNew(newProjectName) } shouldEqual newProjectName
-    dbFutureValue { _.billingProjectQuery.updateStatus(newProjectName, BillingProjectStatus.EnablingServices)} shouldBe ()
-    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.EnablingServices, None))
+    dbFutureValue { _.billingProjectQuery.updateStatus(newProjectName, BillingProjectStatus.Unassigned)} shouldBe ()
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.Unassigned, None))
   }
 
   it should "assign a free project when one exists" in isolatedDbTest {

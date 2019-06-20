@@ -23,6 +23,7 @@ object Boot extends App with LazyLogging {
 
     val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
     val gcsConfig = config.getConfig("gcs")
+    val dmConfig = config.getConfig("deploymentManager")
     val swaggerConfig = config.as[SwaggerConfig]("swagger")
     val gpAllocConfig = config.as[GPAllocConfig]("gpalloc")
 
@@ -42,7 +43,13 @@ object Boot extends App with LazyLogging {
       gcsConfig.getString("pathToBillingPem"), //serviceAccountPemFile
       gcsConfig.getString("billingPemEmail"), //billingPemEmail -- setServiceAccountId
       gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
+      gcsConfig.getString("billingGroupEmail"), //terra-billing@fc.org
       defaultBillingAccount,
+      gcsConfig.getLong("orgID"),
+      dmConfig.getString("deploymentMgrProject"), //terra-deployments-X
+      dmConfig.getString("templatePath"), //https://raw.github.com/org/repo/commit/foo.py
+      dmConfig.getBoolean("cleanupDeploymentAfterCreating"),
+      dmConfig.getString("requesterPaysRole"), //organizations/{{$orgId}}/roles/RequesterPays
       gpAllocConfig.opsThrottle,
       gpAllocConfig.opsThrottlePerDuration)
 

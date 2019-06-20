@@ -143,36 +143,6 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     opMap(CreatingProject) should contain theSameElementsAs creatingOps
   }
 
-  it should "enableServices" in isolatedDbTest {
-    val mockGoogleDAO = new MockGoogleDAO()
-    val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
-
-    //pretend we've already created the project
-    val createdOp = freshOpRecord(newProjectName).copy(done=true)
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
-
-    //tell the monitor to enable services
-    monitor.enableServices.futureValue shouldBe PollForStatus(EnablingServices)
-
-    //project should have correct status
-    val bp = dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }
-    bp shouldBe 'defined
-    bp.get shouldBe BillingProjectRecord(newProjectName, None, EnablingServices, None)
-
-    //check it's made some ops
-    val enablingOps = dbFutureValue { _.operationQuery.getOperations(newProjectName) }
-    enablingOps.size shouldBe (1 + mockGoogleDAO.servicesToEnable.size) //+1 for the create op
-    enablingOps.foreach { _.billingProjectName shouldBe newProjectName }
-
-    val opMap = dbFutureValue { _.operationQuery.getActiveOperationsByType(newProjectName) }
-    opMap.size shouldBe 1 //keys: enabling (creating are all done, so don't show up in get ACTIVE ops)
-
-    //enabling more services
-    opMap(EnablingServices).length shouldBe mockGoogleDAO.servicesToEnable.size
-    opMap(EnablingServices).foreach { _.billingProjectName shouldBe newProjectName }
-    opMap(EnablingServices).foreach { _.done shouldBe false }
-  }
-
   it should "completeSetup" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
     val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
@@ -180,7 +150,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     //pretend we've already created the project and enabled services
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
-    val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=true, operationType = EnablingServices) }
+    val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=true, operationType = CreatingProject) }
     dbFutureValue { _.operationQuery.saveNewOperations(enablingOps) }
 
     //completing setup should complete
@@ -199,11 +169,11 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     //pretend we've already created the project
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
-    val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=false, operationType = EnablingServices) }
+    val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=false, operationType = CreatingProject) }
     dbFutureValue { _.operationQuery.saveNewOperations(enablingOps) }
 
     //poll
-    monitor.pollForStatus(EnablingServices).futureValue shouldBe CompleteSetup
+    monitor.pollForStatus(CreatingProject).futureValue shouldBe CompleteSetup
 
     //did we poll the right things -- i.e. only the active ops?
     mockGoogleDAO.polledOpIds should contain theSameElementsAs enablingOps.map{ _.operationId }

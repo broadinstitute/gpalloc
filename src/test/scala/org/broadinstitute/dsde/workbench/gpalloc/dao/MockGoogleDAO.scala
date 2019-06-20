@@ -46,17 +46,7 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
     Future.successful(ActiveOperationRecord(projectName, CreatingProject, randomOpName(), done = false, None))
   }
 
-  def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
-    enabledProjects += projectName
-    Future.successful(servicesToEnable map { svc =>
-      ActiveOperationRecord(projectName, EnablingServices, randomOpName(Some(svc)), done = false, None)
-    })
-  }
-
-  def setupProjectBucketAccess(projectName: String): Future[Unit] = {
-    bucketedProjects += projectName
-    Future.successful(())
-  }
+  override def cleanupDMProject(projectName: String): Unit = ()
 
   override def deleteProject(projectName: String): Future[Unit] = {
     deletedProjects += projectName

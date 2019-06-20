@@ -42,6 +42,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, Billing
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.broadinstitute.dsde.workbench.metrics.{GoogleInstrumented, GoogleInstrumentedService, Histogram}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport}
+import net.jcazevedo.moultingyaml._
 import spray.json.JsValue
 
 import scala.collection.JavaConverters._
@@ -53,7 +54,7 @@ import scala.util.{Failure, Success}
 case class Resources (
                        name: String,
                        `type`: String,
-                       properties: Map[String, JsValue]
+                       properties: Map[String, YamlValue]
                      )
 case class ConfigContents (
                             resources: Seq[Resources]
@@ -67,19 +68,24 @@ case class TemplateLocation(
                              template_path: String
                            )
 
-object DeploymentManagerJsonSupport {
-  import spray.json.DefaultJsonProtocol._
-  implicit val resourceJsonFormat = jsonFormat3(Resources)
-  implicit val configContentsJsonFormat = jsonFormat1(ConfigContents)
-  implicit val templateLocationJsonFormat = jsonFormat4(TemplateLocation)
+object DeploymentManagerYamlSupport {
+  import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
+  implicit val resourceYamlFormat = yamlFormat3(Resources)
+  implicit val configContentsYamlFormat = yamlFormat1(ConfigContents)
+  implicit val templateLocationYamlFormat = yamlFormat4(TemplateLocation)
 }
 
 class HttpGoogleBillingDAO(appName: String,
                            serviceAccountPemFile: String,
                            billingPemEmail: String,
                            billingEmail: String,
+                           billingGroupEmail: String,
                            defaultBillingAccount: String,
+                           orgID: Long,
                            deploymentMgrProject: String,
+                           dmTemplatePath: String,
+                           cleanupDeploymentAfterCreating: Boolean,
+                           requesterPaysRole: String,
                            opsThrottle: Int,
                            opsThrottlePerDuration: FiniteDuration)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
@@ -161,6 +167,11 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
+  def labelSafeString(s: String, prefix: String = "fc-"): String = {
+    // https://cloud.google.com/compute/docs/labeling-resources#restrictions
+    prefix + s.toLowerCase.replaceAll("[^a-z0-9\\-_]", "-").take(63)
+  }
+
   private def updateGoogleBillingInfo(projectName: String, billingAccount: String) = {
     val projectResourceName = s"projects/$projectName"
     opThrottler.throttle( () => retryWhen500orGoogleError(() => {
@@ -201,27 +212,19 @@ class HttpGoogleBillingDAO(appName: String,
   case class GoogleProjectConflict(projectName: String)
     extends GPAllocException(s"A google project by the name $projectName already exists", StatusCodes.Conflict)
 
-  def getDMConfigYamlString(projectName: String, dmTemplatePath: String, properties: Map[String, JsValue]): String = {
-    import DeploymentManagerJsonSupport._
-    import cats.syntax.either._
-    import io.circe.yaml._
-    import io.circe.yaml.syntax._
-
-    val configContents = ConfigContents(Seq(Resources(projectName, dmTemplatePath, properties)))
-    val jsonVersion = io.circe.jawn.parse(configContents.toJson.toString).valueOr(throw _)
-    jsonVersion.asYaml.spaces2
+  def getDMConfigYamlString(projectName: String, dmTemplatePath: String, properties: Map[String, YamlValue]): String = {
+    import DeploymentManagerYamlSupport._
+    ConfigContents(Seq(Resources(projectName, dmTemplatePath, properties))).toYaml.prettyPrint
   }
 
   /*
  * Set the deployment policy to "abandon" -- i.e. allows the created project to persist even if the deployment is deleted --
  * and then delete the deployment. There's a limit of 1000 deployments so this is important to do.
  */
-  override def cleanupDMProject(projectName: String): Future[Unit] = {
+  override def cleanupDMProject(projectName: String): Unit = {
     if( cleanupDeploymentAfterCreating ) {
       executeGoogleRequest(
-        deploymentManager.deployments().delete(deploymentMgrProject, projectToDM(projectName)).setDeletePolicy("ABANDON")).void
-    } else {
-      Future.successful(())
+        deploymentManager.deployments().delete(deploymentMgrProject, projectToDM(projectName)).setDeletePolicy("ABANDON"))
     }
   }
 
@@ -239,25 +242,23 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  override def createProject(projectName: String, billingAccountId: String, billingAccountDisplayName: String, dmTemplatePath: String, requesterPaysRole: String, ownerGroupEmail: String, computeUserGroupEmail: String, projectTemplate: ProjectTemplate): Future[RawlsBillingProjectOperationRecord] = {
-    import spray.json._
-    import spray.json.DefaultJsonProtocol._
-    import DeploymentManagerJsonSupport._
+  override def createProject(projectName: String, billingAccountId: String): Future[ActiveOperationRecord] = {
+    import DefaultYamlProtocol._
+    import DeploymentManagerYamlSupport._
 
-    val templateLabels = parseTemplateLocation(dmTemplatePath).map(_.toJson).getOrElse(Map("template_path" -> labelSafeString(dmTemplatePath)).toJson)
+    val templateLabels = parseTemplateLocation(dmTemplatePath).map(_.toYaml).getOrElse(Map("template_path" -> labelSafeString(dmTemplatePath)).toYaml)
 
     val properties = Map (
-      "billingAccountId" -> billingAccountId.toJson,
-      "billingAccountFriendlyName" -> billingAccountDisplayName.toJson,
-      "projectId" -> projectName.toJson,
-      "parentOrganization" -> orgID.toJson,
-      "fcBillingGroup" -> billingGroupEmail.toJson,
-      "projectOwnersGroup" -> ownerGroupEmail.value.toJson,
-      "projectViewersGroup" -> computeUserGroupEmail.value.toJson,
-      "requesterPaysRole" -> requesterPaysRole.toJson,
-      "highSecurityNetwork" -> false.toJson,
-      "fcProjectOwners" -> projectTemplate.owners.toJson,
-      "fcProjectEditors" -> projectTemplate.editors.toJson,
+      "billingAccountId" -> billingAccountId.toYaml,
+      "projectId" -> projectName.toYaml,
+      "parentOrganization" -> orgID.toYaml,
+      "fcBillingGroup" -> billingGroupEmail.toYaml,
+      //"projectOwnersGroup" -> ownerGroupEmail.toYaml,                 //NOTE: these are set by rawls. DM lets these be empty
+      //"projectViewersGroup" -> computeUserGroupEmail.toYaml,
+      //"fcProjectOwners" -> projectTemplate.owners.toYaml,
+      //"fcProjectEditors" -> projectTemplate.editors.toYaml,
+      "requesterPaysRole" -> requesterPaysRole.toYaml,
+      "highSecurityNetwork" -> false.toYaml,
       "labels" -> templateLabels
     )
 
@@ -271,7 +272,7 @@ class HttpGoogleBillingDAO(appName: String,
       }
     }) map { googleOperation =>
       val errorStr = Option(googleOperation.getError).map(errors => errors.getErrors.asScala.map(e => toErrorMessage(e.getMessage, e.getCode)).mkString("\n"))
-      ActiveOperationRecord(projectName, CreatingProject, googleOperation.getName, toScalaBool(googleOperation.status == "DONE"), Option(googleOperation.getError).map(error => toErrorMessage(error.getMessage, error.getCode)))
+      ActiveOperationRecord(projectName, CreatingProject, googleOperation.getName, toScalaBool(googleOperation.getStatus == "DONE"), errorStr)
     }
   }
 
@@ -307,24 +308,6 @@ class HttpGoogleBillingDAO(appName: String,
 
   protected def cromwellAuthBucketName(bpName: String) = s"cromwell-auth-$bpName"
 
-  protected def createCromwellAuthBucket(billingProjectName: String, projectNumber: Long): Future[String] = {
-    val bucketName = cromwellAuthBucketName(billingProjectName)
-    retryWithRecoverWhen500orGoogleError(
-      () => {
-        //Note we have to give ourselves access to the bucket too, otherwise we can't clean up the bucket when we're done.
-        val bucketAcls = List(
-          new BucketAccessControl().setEntity("user-" + billingEmail).setRole("OWNER"),
-          new BucketAccessControl().setEntity("project-editors-" + projectNumber).setRole("OWNER"),
-          new BucketAccessControl().setEntity("project-owners-" + projectNumber).setRole("OWNER")).asJava
-        val defaultObjectAcls = List(new ObjectAccessControl().setEntity("project-editors-" + projectNumber).setRole("OWNER"), new ObjectAccessControl().setEntity("project-owners-" + projectNumber).setRole("OWNER")).asJava
-        val bucket = new Bucket().setName(bucketName).setAcl(bucketAcls).setDefaultObjectAcl(defaultObjectAcls)
-        val inserter = storage.buckets.insert(billingProjectName, bucket)
-        executeGoogleRequest(inserter)
-
-        bucketName
-      }) { case t: HttpResponseException if t.getStatusCode == 409 => bucketName }
-  }
-
   protected def leaveThisIAMPolicy(entityName: String, projectNumber: Long): Boolean = {
     if(entityName.startsWith("serviceAccount:")) {
       /* of course, Google's pre-generated SAs aren't consistently named:
@@ -336,7 +319,7 @@ class HttpGoogleBillingDAO(appName: String,
       entityName.split("@").head.contains(s"$projectNumber")
     } else {
       //the only other acceptable user is billing@thisdomain.firecloud.org
-      entityName == s"user:$billingEmail"
+      entityName == s"group:$billingGroupEmail"
     }
   }
 

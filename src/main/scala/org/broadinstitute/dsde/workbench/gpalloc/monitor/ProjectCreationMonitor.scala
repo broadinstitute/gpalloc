@@ -32,16 +32,16 @@ object ProjectCreationMonitor {
   case object Success extends ProjectCreationMonitorMessage
 
   def props(projectName: String,
-            billingAccount: String,
+            billingAccountId: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
             gpAllocConfig: GPAllocConfig): Props = {
-    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig))
+    Props(new ProjectCreationMonitor(projectName, billingAccountId, dbRef, googleDAO, gpAllocConfig))
   }
 }
 
 class ProjectCreationMonitor(projectName: String,
-                             billingAccount: String,
+                             billingAccountId: String,
                              dbRef: DbReference,
                              googleDAO: GoogleDAO,
                              gpAllocConfig: GPAllocConfig)
@@ -55,8 +55,6 @@ class ProjectCreationMonitor(projectName: String,
       resumeInflightProject pipeTo self
     case CreateProject =>
       createNewProject pipeTo self
-    case EnableServices =>
-      enableServices pipeTo self
     case CompleteSetup =>
       completeSetup pipeTo self
     case PollForStatus(status) =>
@@ -95,7 +93,7 @@ class ProjectCreationMonitor(projectName: String,
     for {
       // We're not using db.saveNewProject and doing two seperate transactions here because we want to get the new project record in the db ASAP.
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNew(projectName, BillingProjectStatus.CreatingProject) }
-      newOperationRec <- googleDAO.createProject(projectName, billingAccount)
+      newOperationRec <- googleDAO.createProject(projectName, billingAccountId)
       _ <- dbRef.inTransaction { da => da.operationQuery.saveNewOperations(Seq(newOperationRec)) }
     } yield {
       logger.info(s"Create request submitted for $projectName.")
@@ -103,25 +101,11 @@ class ProjectCreationMonitor(projectName: String,
     }
   }
 
-  def enableServices: Future[ProjectCreationMonitorMessage] = {
-    for {
-      serviceOps <- googleDAO.enableCloudServices(projectName, billingAccount)
-      _ <- dbRef.inTransaction { da => DBIO.seq(
-          da.billingProjectQuery.updateStatus(projectName, EnablingServices),
-          da.operationQuery.saveNewOperations(serviceOps)) }
-    } yield {
-      logger.info(s"Asked Google to enable services for $projectName.")
-      PollForStatus(EnablingServices)
-    }
-  }
-
   def completeSetup: Future[ProjectCreationMonitorMessage] = {
-    for {
-      _ <- googleDAO.setupProjectBucketAccess(projectName)
-      _ <- dbRef.inTransaction { da => da.billingProjectQuery.updateStatus(projectName, Unassigned) }
-    } yield {
-      Success
-    }
+    googleDAO.cleanupDMProject(projectName)
+    dbRef.inTransaction { da =>
+      da.billingProjectQuery.updateStatus(projectName, Unassigned)
+    } map { _ => Success }
   }
 
   //checks Google for status of active operations and figures out what next
@@ -157,8 +141,7 @@ class ProjectCreationMonitor(projectName: String,
 
   def getNextStatusMessage(status: BillingProjectStatus.BillingProjectStatus): ProjectCreationMonitorMessage = {
     status match {
-      case CreatingProject => EnableServices
-      case EnablingServices => CompleteSetup
+      case CreatingProject => CompleteSetup
       case _ => throw new WorkbenchException(s"ProjectCreationMonitor for $projectName called getNextStatusMessage with surprising status $status")
     }
   }
