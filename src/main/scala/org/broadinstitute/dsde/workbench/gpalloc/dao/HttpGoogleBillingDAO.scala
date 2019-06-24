@@ -417,8 +417,13 @@ class HttpGoogleBillingDAO(appName: String,
     }
   }
 
-  protected def retryForPetDeletion[T](op: () => T)(implicit histo: Histogram): Future[T] = {
-    retryExponentially(when500orGoogleErrorButNot404)(() => Future(blocking(op())))
+  protected def retryForPetDeletion(op: () => Unit)(implicit histo: Histogram): Future[Unit] = {
+    retryExponentially(when500orGoogleErrorButNot404){() =>
+      Future(blocking(op())).recover {
+        case t: GoogleJsonResponseException if t.getStatusCode == 404 => ()
+        case t: HttpResponseException if t.getStatusCode == 404 => ()
+      }
+    }
   }
 
   protected def petGoogleRq[T](op: AbstractGoogleClientRequest[T]) = {
