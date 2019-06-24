@@ -420,6 +420,9 @@ class HttpGoogleBillingDAO(appName: String,
   protected def retryForPetDeletion(op: () => Unit)(implicit histo: Histogram): Future[Unit] = {
     retryExponentially(when500orGoogleErrorButNot404){() =>
       Future(blocking(op())).recover {
+        //404 is okay, means the pet is already deleted which is what we want.
+        //probably what happened is the test deleted the project, which now deletes the pets.
+        //Google can be a bit "eventually" in this instance when you then list which pets are in the project.
         case t: GoogleJsonResponseException if t.getStatusCode == 404 => ()
         case t: HttpResponseException if t.getStatusCode == 404 => ()
       }
