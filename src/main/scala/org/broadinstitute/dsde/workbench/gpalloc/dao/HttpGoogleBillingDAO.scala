@@ -318,8 +318,11 @@ class HttpGoogleBillingDAO(appName: String,
        */
       entityName.split("@").head.contains(s"$projectNumber")
     } else {
-      //the only other acceptable user is billing@thisdomain.firecloud.org
-      entityName == s"group:$billingGroupEmail"
+      //the only other acceptable users:
+      // - terra-billing@thisdomain.firecloud.org
+      // - billing@thisdomain.firecloud.org
+      entityName == s"group:$billingGroupEmail" ||
+        entityName == s"user:$billingEmail"
     }
   }
 

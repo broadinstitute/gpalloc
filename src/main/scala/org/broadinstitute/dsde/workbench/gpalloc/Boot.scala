@@ -4,11 +4,11 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.google.api.client.json.jackson2.JacksonFactory
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.gpalloc.api.{GPAllocRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
+import org.broadinstitute.dsde.workbench.gpalloc.config.{DeploymentManagerConfig, GPAllocConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.HttpGoogleBillingDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor
@@ -23,7 +23,7 @@ object Boot extends App with LazyLogging {
 
     val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
     val gcsConfig = config.getConfig("gcs")
-    val dmConfig = config.getConfig("deploymentManager")
+    val dmConfig = DeploymentManagerConfig(gcsConfig.getConfig("deploymentManager"))
     val swaggerConfig = config.as[SwaggerConfig]("swagger")
     val gpAllocConfig = config.as[GPAllocConfig]("gpalloc")
 
@@ -33,8 +33,6 @@ object Boot extends App with LazyLogging {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val dbRef = DbReference.init(config)
-
-    val jsonFactory = JacksonFactory.getDefaultInstance
 
     val defaultBillingAccount = gcsConfig.getString("billingAccount")
 
@@ -46,10 +44,10 @@ object Boot extends App with LazyLogging {
       gcsConfig.getString("billingGroupEmail"), //terra-billing@fc.org
       defaultBillingAccount,
       gcsConfig.getLong("orgID"),
-      dmConfig.getString("deploymentMgrProject"), //terra-deployments-X
-      dmConfig.getString("templatePath"), //https://raw.github.com/org/repo/commit/foo.py
-      dmConfig.getBoolean("cleanupDeploymentAfterCreating"),
-      dmConfig.getString("requesterPaysRole"), //organizations/{{$orgId}}/roles/RequesterPays
+      dmConfig.projectID,
+      dmConfig.templatePath,
+      dmConfig.cleanupDeploymentAfterCreating,
+      dmConfig.requesterPaysRole,
       gpAllocConfig.opsThrottle,
       gpAllocConfig.opsThrottlePerDuration)
 

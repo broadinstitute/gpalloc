@@ -10,7 +10,7 @@ object Dependencies {
   val scalaTestV    = "3.0.1"
   val slickV        = "3.2.1"
 
-  val workbenchUtilV    = "0.3-f3ce961"
+  val workbenchUtilV    = "0.5-7d46109-SNAP" //https://github.com/broadinstitute/workbench-libs/pull/249
   val workbenchModelV   = "0.9-d722ae2"
   val workbenchGoogleV  = "0.11-7ad0aa8"
   val workbenchMetricsV = "0.3-1b977d7"

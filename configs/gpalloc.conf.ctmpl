@@ -2,6 +2,7 @@
 {{with $image := env "IMAGE"}}
 {{with $billingServiceAccount := vault (printf "secret/dsde/firecloud/%s/common/billing-account.json" $environment)}}
 {{with $refreshTokenServiceAccount := vault (printf "secret/dsde/firecloud/%s/common/refresh-token-oauth-credential.json" $environment)}}
+{{with $orgId := env "GOOGLE_APPS_ORGANIZATION_ID"}}
 
 gcs {
   pathToBillingPem = "/etc/billing-account.pem"
@@ -12,6 +13,20 @@ gcs {
 
 gpalloc {
     projectPrefix = gpalloc-{{$environment}}-{{$image}}
+}
+
+deploymentManager {
+    # NOTE: Keep this in sync with Rawls' conf.
+    # NOTE: You may set this to either a GCP project/deployment_name, or a URL reference to a template.
+    # We typically use GitHub here. In this case, make sure of two things:
+	#    1. The URL you put here is the raw text version of the template, not GitHub's HTML preview of the page. You'll know it's right if the URL starts "https://raw.githubusercontent.com". GPAlloc sanity checks this and will fail to start up if you get it wrong.
+	#    2. Don't refer to the file via a GitHub branch. This URL will point to the most recent version of the file on that branch, which means the template could change underneath you. This is really bad because it means we can't track which template we used to create any given project. Instead, refer to it through a specific commit, which is immutable. The only exception to this is if you're running on a FiaB and developing the DM template, in which case doing this deliberately will spare you repeatedly changing the Rawls config and redeploying for new versions. To combat getting this wrong, GPAlloc checks for "master" and "develop" branches in the URL and will fail to start up if they're present.
+    templatePath = "https://raw.githubusercontent.com/broadinstitute/gcp-dm-templates/683960d7d60f4d369174f96a83dce915bde8bacd/firecloud_project.py"
+    projectID = "terra-deployments-{{$environment}}"
+    orgID = {{$orgId}}
+    billingProbeEmail = "billingprobe@terra-deployments-{{$environment}}.iam.gserviceaccount.com"
+
+    requesterPaysRole=organizations/{{$orgId}}/roles/RequesterPays
 }
 
 mysql {
