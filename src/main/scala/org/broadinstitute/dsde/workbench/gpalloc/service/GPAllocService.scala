@@ -179,6 +179,24 @@ class GPAllocService(protected val dbRef: DbReference,
 
   //create new google project if we don't have any available
   private def maybeCreateNewProjects(): Unit = {
+    dbRef.inTransaction { da =>
+      for {
+        free <- da.billingProjectQuery.countUnassignedAndFutureProjects
+        all <- da.billingProjectQuery.countAllProjects
+      } yield {
+        Math.max(gpAllocConfig.minimumFreeProjects - free, gpAllocConfig.minimumProjects - all)
+      }
+    } map {
+      case count if count > 0 =>
+        (1 to count) foreach { _ =>
+          createNewGoogleProject()
+        }
+      case _ => //do nothing
+    }
+  }
+
+  //create new google project if we don't have any available
+  private def maybeCreateNewProjects_old(): Unit = {
     dbRef.inTransaction { da => da.billingProjectQuery.countUnassignedAndFutureProjects } map {
       case count if count < gpAllocConfig.minimumFreeProjects =>
         (1 to (gpAllocConfig.minimumFreeProjects - count)) foreach { _ =>

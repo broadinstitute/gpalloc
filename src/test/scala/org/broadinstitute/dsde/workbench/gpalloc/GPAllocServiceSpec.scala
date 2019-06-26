@@ -17,12 +17,12 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   import profile.api._
 
   //returns a service and a probe that watches the pretend supervisor actor
-  def gpAllocService(dbRef: DbReference, minimumFreeProjects: Int, abandonmentTime: FiniteDuration = 20 hours): (GPAllocService, TestProbe, MockGoogleDAO) = {
+  def gpAllocService(dbRef: DbReference, minimumFreeProjects: Int, abandonmentTime: FiniteDuration = 20 hours, minimumProjects: Int = 0): (GPAllocService, TestProbe, MockGoogleDAO) = {
     val mockGoogleDAO = new MockGoogleDAO()
     val probe = TestProbe()
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
-    val newConf = gpAllocConfig.copy(minimumFreeProjects=minimumFreeProjects, abandonmentTime=abandonmentTime)
+    val newConf = gpAllocConfig.copy(minimumFreeProjects=minimumFreeProjects, minimumProjects=minimumProjects, abandonmentTime=abandonmentTime)
     val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, newConf)
     probe.expectMsgClass(1 seconds, classOf[RegisterGPAllocService])
     (gpAlloc, probe, mockGoogleDAO)
@@ -47,8 +47,17 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
   }
 
-  it should "wake up and create new projects where necessary" in isolatedDbTest {
+  it should "wake up and create new projects to minimum free" in isolatedDbTest {
     val (gpAlloc, probe, _) = gpAllocService(dbRef, 2)
+
+    //should hit the threshold and ask the supervisor to create a project
+    //(but this won't really do anything because the supervisor is a fake)
+    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+  }
+
+  it should "create projects up to the baseline minimum number" in isolatedDbTest {
+    val (gpAlloc, probe, _) = gpAllocService(dbRef, 0, 20 hours, 2)
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
