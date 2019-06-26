@@ -50,4 +50,4 @@ swagger {
   googleClientId = "{{$refreshTokenServiceAccount.Data.web.client_id}}"
   realm = "broad-dsde-{{$environment}}"
 }
-{{end}}{{end}}{{end}}{{end}}
+{{end}}{{end}}{{end}}{{end}}{{end}}
