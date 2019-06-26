@@ -60,15 +60,10 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
       eventually(longer) {
         mockGoogleDAO.createdProjects should contain(newProjectName)
       }
+
       eventually(longer) {
-        mockGoogleDAO.enabledProjects should contain(newProjectName)
+        mockGoogleDAO.polledOpIds.size shouldEqual 1
       }
-      eventually(longer) {
-        mockGoogleDAO.bucketedProjects should contain(newProjectName)
-      }
-      eventually(longer) {
-        mockGoogleDAO.polledOpIds.size shouldEqual (1 + mockGoogleDAO.servicesToEnable.length)
-      } //+1 for the create op
 
       //TestProjectCreationSupervisor registers its children with TestKit, so when the child is done it should self-terminate
       expectMsgClass(1 second, classOf[Terminated])

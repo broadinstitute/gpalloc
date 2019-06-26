@@ -14,8 +14,6 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
   val servicesToEnable = Seq("fooService", "barService", "bazService")
 
   var createdProjects: mutable.Set[String] = mutable.Set.empty[String]
-  var enabledProjects: mutable.Set[String] = mutable.Set.empty[String]
-  var bucketedProjects: mutable.Set[String] = mutable.Set.empty[String]
   var polledOpIds: mutable.Set[String] = mutable.Set.empty[String]
   var scrubbedProjects: mutable.Set[String] = mutable.Set.empty[String]
   var deletedProjects: mutable.Set[String] = mutable.Set.empty[String]
