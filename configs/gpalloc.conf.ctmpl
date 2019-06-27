@@ -8,6 +8,7 @@ gcs {
   pathToBillingPem = "/etc/billing-account.pem"
   billingPemEmail = "{{$billingServiceAccount.Data.client_email}}"
   billingEmail = "billing@{{if eq $environment "qa"}}quality{{else}}test{{end}}.firecloud.org"
+  billingGroupEmail = "terra-billing@{{if eq $environment "qa"}}quality{{else}}test{{end}}.firecloud.org"
   billingAccount = "billingAccounts/00708C-45D19D-27AAFA"
 }
 
