@@ -1,7 +1,7 @@
 {{with $environment := env "ENVIRONMENT"}}
 {{with $image := env "IMAGE"}}
-{{with $billingServiceAccount := vault (printf "secret/dsde/firecloud/%s/common/billing-account.json" $environment)}}
-{{with $refreshTokenServiceAccount := vault (printf "secret/dsde/firecloud/%s/common/refresh-token-oauth-credential.json" $environment)}}
+{{with $billingServiceAccount := secret (printf "secret/dsde/firecloud/%s/common/billing-account.json" $environment)}}
+{{with $refreshTokenServiceAccount := secret (printf "secret/dsde/firecloud/%s/common/refresh-token-oauth-credential.json" $environment)}}
 {{with $orgId := env "GOOGLE_APPS_ORGANIZATION_ID"}}
 
 gcs {
