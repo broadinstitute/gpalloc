@@ -201,9 +201,9 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
   override def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord] = {
-    retryWhen500orGoogleError(() => {
+    opThrottler.throttle( () => retryWhen500orGoogleError(() => {
       executeGoogleRequest(deploymentManager.operations().get(deploymentMgrProject, operation.operationId))
-    }).map { op =>
+    })).map { op =>
       val errorStr = Option(op.getError).map(errors => errors.getErrors.asScala.map(e => toErrorMessage(e.getMessage, e.getCode)).mkString("\n"))
       operation.copy(done = op.getStatus == "DONE", errorMessage = errorStr)
     }
