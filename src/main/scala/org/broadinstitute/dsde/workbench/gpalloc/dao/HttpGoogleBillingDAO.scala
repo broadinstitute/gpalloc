@@ -266,13 +266,12 @@ class HttpGoogleBillingDAO(appName: String,
     val yamlConfig = new ConfigFile().setContent(getDMConfigYamlString(projectName, dmTemplatePath, properties))
     val deploymentConfig = new TargetConfiguration().setConfig(yamlConfig)
 
-    retryWhen500orGoogleError(() => {
-      executeGoogleRequest {
-        deploymentManager.deployments().insert(deploymentMgrProject, new Deployment().setName(projectToDM(projectName)).setTarget(deploymentConfig))
-      }
-    }) map { googleOperation =>
-      val errorStr = Option(googleOperation.getError).map(errors => errors.getErrors.asScala.map(e => toErrorMessage(e.getMessage, e.getCode)).mkString("\n"))
-      ActiveOperationRecord(projectName, CreatingProject, googleOperation.getName, toScalaBool(googleOperation.getStatus == "DONE"), errorStr)
+    opThrottler.throttle ( () => retryWhen500orGoogleError(() => {
+        executeGoogleRequest {
+          deploymentManager.deployments().insert(deploymentMgrProject, new Deployment().setName(projectToDM(projectName)).setTarget(deploymentConfig))
+      }})) map { googleOperation =>
+        val errorStr = Option(googleOperation.getError).map(errors => errors.getErrors.asScala.map(e => toErrorMessage(e.getMessage, e.getCode)).mkString("\n"))
+        ActiveOperationRecord(projectName, CreatingProject, googleOperation.getName, toScalaBool(googleOperation.getStatus == "DONE"), errorStr)
     }
   }
 
