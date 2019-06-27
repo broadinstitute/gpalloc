@@ -255,7 +255,7 @@ class HttpGoogleBillingDAO(appName: String,
       "fcBillingGroup" -> billingGroupEmail.toYaml,
       //"projectOwnersGroup" -> ownerGroupEmail.toYaml,                 //NOTE: these are set by rawls. DM lets these be empty
       //"projectViewersGroup" -> computeUserGroupEmail.toYaml,
-      //"fcProjectOwners" -> projectTemplate.owners.toYaml,
+      "fcProjectOwners" -> List(s"group:$billingGroupEmail").toYaml,
       //"fcProjectEditors" -> projectTemplate.editors.toYaml,
       "requesterPaysRole" -> requesterPaysRole.toYaml,
       "highSecurityNetwork" -> false.toYaml,
