@@ -43,7 +43,7 @@ object Boot extends App with LazyLogging {
       gcsConfig.getString("billingEmail"), //billingEmail -- setServiceAccountUser
       gcsConfig.getString("billingGroupEmail"), //terra-billing@fc.org
       defaultBillingAccount,
-      gcsConfig.getLong("orgID"),
+      dmConfig.orgID,
       dmConfig.projectID,
       dmConfig.templatePath,
       dmConfig.cleanupDeploymentAfterCreating,
