@@ -23,7 +23,7 @@ object Boot extends App with LazyLogging {
 
     val config = ConfigFactory.parseResources("gpalloc.conf").withFallback(ConfigFactory.load())
     val gcsConfig = config.getConfig("gcs")
-    val dmConfig = DeploymentManagerConfig(gcsConfig.getConfig("deploymentManager"))
+    val dmConfig = DeploymentManagerConfig(config.getConfig("deploymentManager"))
     val swaggerConfig = config.as[SwaggerConfig]("swagger")
     val gpAllocConfig = config.as[GPAllocConfig]("gpalloc")
 
