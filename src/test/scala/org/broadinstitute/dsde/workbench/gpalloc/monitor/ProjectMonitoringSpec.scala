@@ -90,7 +90,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     withSupervisor(mockGoogleDAO) { supervisor =>
       //this will call RegisterGPAllocService in the supervisor, kicking off a sweep
-      val newConf = gpAllocConfig.copy(minimumFreeProjects = 0, abandonmentTime = 2 hours)
+      val newConf = gpAllocConfig.copy(minimumFreeProjects = 0, minimumProjects = 0, abandonmentTime = 2 hours)
       new GPAllocService(dbRef, swaggerConfig, supervisor, mockGoogleDAO, newConf)
 
       eventually {

@@ -144,6 +144,10 @@ trait BillingProjectComponent extends GPAllocComponent {
       }
     }
 
+    def countAllProjects: DBIO[Int] = {
+      billingProjectQuery.length.result
+    }
+
     def countUnassignedProjects: DBIO[Int] = {
       findUnassignedProjects.length.result
     }
