@@ -107,11 +107,11 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
       supervisor ! RequestNewProject(newProjectName)
       supervisor ! RequestNewProject(newProjectName2)
 
-      eventually(timeout = Timeout(Span(2, Seconds))) {
+      eventually(timeout = Timeout(Span(4, Seconds))) {
         supervisor.underlyingActor.projectCreationTimes.length shouldBe 2
         val second = supervisor.underlyingActor.projectCreationTimes(1)
         val first = supervisor.underlyingActor.projectCreationTimes.head
-        JDuration.between(first, second).toMillis shouldBe > (1000L)
+        JDuration.between(first, second).toMillis shouldBe > (2000L)
       }
     }
   }
