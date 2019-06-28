@@ -221,7 +221,7 @@ class HttpGoogleBillingDAO(appName: String,
  * Set the deployment policy to "abandon" -- i.e. allows the created project to persist even if the deployment is deleted --
  * and then delete the deployment. There's a limit of 1000 deployments so this is important to do.
  */
-  override def cleanupDMProject(projectName: String): Unit = {
+  override def cleanupDeployment(projectName: String): Unit = {
     if( cleanupDeploymentAfterCreating ) {
       executeGoogleRequest(
         deploymentManager.deployments().delete(deploymentMgrProject, projectToDM(projectName)).setDeletePolicy("ABANDON"))

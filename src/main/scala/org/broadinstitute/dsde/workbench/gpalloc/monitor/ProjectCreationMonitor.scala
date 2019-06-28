@@ -68,6 +68,7 @@ class ProjectCreationMonitor(projectName: String,
     //stop because google said an operation failed
     case Fail(failedOps) =>
       logger.error(s"Creation of new project $projectName failed. These opids died: ${failedOps.map(op => s"id: ${op.operationId}, error: ${op.errorMessage}").mkString(", ")}")
+      cleanupOnError()
       stop(self)
 
     //stop because something (probably google polling) throw an exception
@@ -75,7 +76,15 @@ class ProjectCreationMonitor(projectName: String,
       val stackTrace = new StringWriter
       throwable.printStackTrace(new PrintWriter(new StringWriter))
       logger.error(s"Creation of new project $projectName failed because of an exception: ${throwable.getMessage} \n${stackTrace.toString}")
+      cleanupOnError()
       stop(self)
+  }
+
+  def cleanupOnError(): Unit = {
+    //these can all run asynchronously
+    googleDAO.cleanupDeployment(projectName)
+    googleDAO.deleteProject(projectName)
+    dbRef.inTransaction { da => da.billingProjectQuery.deleteProject(projectName) }
   }
 
   def scheduleNextPoll(status: BillingProjectStatus, pollTime: FiniteDuration = gpAllocConfig.projectMonitorPollInterval): Unit = {
@@ -102,7 +111,7 @@ class ProjectCreationMonitor(projectName: String,
   }
 
   def completeSetup: Future[ProjectCreationMonitorMessage] = {
-    googleDAO.cleanupDMProject(projectName)
+    googleDAO.cleanupDeployment(projectName)
     dbRef.inTransaction { da =>
       da.billingProjectQuery.updateStatus(projectName, Unassigned)
     } map { _ => Success }
@@ -122,8 +131,7 @@ class ProjectCreationMonitor(projectName: String,
       updatedOps
     }
 
-    //now we have some some updated ops; decide how to move forward
-    //note that we only need to check
+    //now we have some some updated ops, decide how to move forward
     updatedOpsF map { ops =>
       if( ops.exists(_.errorMessage.isDefined) ) {
         //fail-fast

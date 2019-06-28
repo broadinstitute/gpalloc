@@ -12,7 +12,7 @@ abstract class GoogleDAO {
 
   def createProject(projectName: String, billingAccountId: String): Future[ActiveOperationRecord]
   def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord]
-  def cleanupDMProject(projectName: String): Unit
+  def cleanupDeployment(projectName: String): Unit
 
   def deleteProject(projectName: String): Future[Unit]
 }
