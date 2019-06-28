@@ -107,6 +107,11 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
       supervisor ! RequestNewProject(newProjectName)
       supervisor ! RequestNewProject(newProjectName2)
 
+      eventually(timeout = Timeout(Span(2, Seconds))) {
+        dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }.get.status shouldBe CreatingProject
+        dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName2) }.get.status shouldBe Queued
+      }
+
       eventually(timeout = Timeout(Span(4, Seconds))) {
         supervisor.underlyingActor.projectCreationTimes.length shouldBe 2
         val second = supervisor.underlyingActor.projectCreationTimes(1)

@@ -66,7 +66,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   }
 
   it should "not keep creating projects indefinitely if enough creating ones are in-flight" in isolatedDbTest {
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName
+    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Queued) } shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName2
     val (gpAlloc, probe, _) = gpAllocService(dbRef, 2)
 

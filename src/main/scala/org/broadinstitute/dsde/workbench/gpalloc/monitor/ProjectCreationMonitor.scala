@@ -100,8 +100,8 @@ class ProjectCreationMonitor(projectName: String,
 
   def createNewProject: Future[ProjectCreationMonitorMessage] = {
     for {
-      // We're not using db.saveNewProject and doing two seperate transactions here because we want to get the new project record in the db ASAP.
-      _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNew(projectName, BillingProjectStatus.CreatingProject) }
+      // We're finally creating the project in Google land! Flip its status and let's go.
+      _ <- dbRef.inTransaction { da => da.billingProjectQuery.updateStatus(projectName, BillingProjectStatus.CreatingProject) }
       newOperationRec <- googleDAO.createProject(projectName, billingAccountId)
       _ <- dbRef.inTransaction { da => da.operationQuery.saveNewOperations(Seq(newOperationRec)) }
     } yield {
