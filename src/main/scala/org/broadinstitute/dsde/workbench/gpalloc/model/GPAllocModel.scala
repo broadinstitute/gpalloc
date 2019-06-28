@@ -12,8 +12,8 @@ import scala.language.implicitConversions
 
 object BillingProjectStatus extends Enumeration {
   type BillingProjectStatus = Value
-  val CreatingProject, EnablingServices, Unassigned, Assigned, Deleted = Value
-  val creatingStatuses = Seq(CreatingProject, EnablingServices)
+  val CreatingProject, Unassigned, Assigned, Deleted = Value
+  val creatingStatuses = Seq(CreatingProject)
 
   class StatusValue(status: BillingProjectStatus) {
     def isCreating = creatingStatuses.contains(status)

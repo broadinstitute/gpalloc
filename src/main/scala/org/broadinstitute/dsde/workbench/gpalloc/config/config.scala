@@ -23,7 +23,8 @@ package object config {
       config.as[FiniteDuration]("abandonmentTime"),
       config.as[FiniteDuration]("abandonmentSweepInterval"),
       config.as[Int]("minimumFreeProjects"),
-      config.as[Int]("projectsPerSecondThrottle"),
+      config.as[Int]("projectsThrottle"),
+      config.as[FiniteDuration]("projectsThrottlePerDuration"),
       config.as[Int]("opsThrottle"),
       config.as[FiniteDuration]("opsThrottlePerDuration"),
       config.as[String]("projectPrefix")

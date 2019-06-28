@@ -32,16 +32,16 @@ object ProjectCreationMonitor {
   case object Success extends ProjectCreationMonitorMessage
 
   def props(projectName: String,
-            billingAccount: String,
+            billingAccountId: String,
             dbRef: DbReference,
             googleDAO: GoogleDAO,
             gpAllocConfig: GPAllocConfig): Props = {
-    Props(new ProjectCreationMonitor(projectName, billingAccount, dbRef, googleDAO, gpAllocConfig))
+    Props(new ProjectCreationMonitor(projectName, billingAccountId, dbRef, googleDAO, gpAllocConfig))
   }
 }
 
 class ProjectCreationMonitor(projectName: String,
-                             billingAccount: String,
+                             billingAccountId: String,
                              dbRef: DbReference,
                              googleDAO: GoogleDAO,
                              gpAllocConfig: GPAllocConfig)
@@ -55,8 +55,6 @@ class ProjectCreationMonitor(projectName: String,
       resumeInflightProject pipeTo self
     case CreateProject =>
       createNewProject pipeTo self
-    case EnableServices =>
-      enableServices pipeTo self
     case CompleteSetup =>
       completeSetup pipeTo self
     case PollForStatus(status) =>
@@ -70,6 +68,7 @@ class ProjectCreationMonitor(projectName: String,
     //stop because google said an operation failed
     case Fail(failedOps) =>
       logger.error(s"Creation of new project $projectName failed. These opids died: ${failedOps.map(op => s"id: ${op.operationId}, error: ${op.errorMessage}").mkString(", ")}")
+      cleanupOnError()
       stop(self)
 
     //stop because something (probably google polling) throw an exception
@@ -77,7 +76,15 @@ class ProjectCreationMonitor(projectName: String,
       val stackTrace = new StringWriter
       throwable.printStackTrace(new PrintWriter(new StringWriter))
       logger.error(s"Creation of new project $projectName failed because of an exception: ${throwable.getMessage} \n${stackTrace.toString}")
+      cleanupOnError()
       stop(self)
+  }
+
+  def cleanupOnError(): Unit = {
+    //these can all run asynchronously
+    googleDAO.cleanupDeployment(projectName)
+    googleDAO.deleteProject(projectName)
+    dbRef.inTransaction { da => da.billingProjectQuery.deleteProject(projectName) }
   }
 
   def scheduleNextPoll(status: BillingProjectStatus, pollTime: FiniteDuration = gpAllocConfig.projectMonitorPollInterval): Unit = {
@@ -95,7 +102,7 @@ class ProjectCreationMonitor(projectName: String,
     for {
       // We're not using db.saveNewProject and doing two seperate transactions here because we want to get the new project record in the db ASAP.
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.saveNew(projectName, BillingProjectStatus.CreatingProject) }
-      newOperationRec <- googleDAO.createProject(projectName, billingAccount)
+      newOperationRec <- googleDAO.createProject(projectName, billingAccountId)
       _ <- dbRef.inTransaction { da => da.operationQuery.saveNewOperations(Seq(newOperationRec)) }
     } yield {
       logger.info(s"Create request submitted for $projectName.")
@@ -103,25 +110,11 @@ class ProjectCreationMonitor(projectName: String,
     }
   }
 
-  def enableServices: Future[ProjectCreationMonitorMessage] = {
-    for {
-      serviceOps <- googleDAO.enableCloudServices(projectName, billingAccount)
-      _ <- dbRef.inTransaction { da => DBIO.seq(
-          da.billingProjectQuery.updateStatus(projectName, EnablingServices),
-          da.operationQuery.saveNewOperations(serviceOps)) }
-    } yield {
-      logger.info(s"Asked Google to enable services for $projectName.")
-      PollForStatus(EnablingServices)
-    }
-  }
-
   def completeSetup: Future[ProjectCreationMonitorMessage] = {
-    for {
-      _ <- googleDAO.setupProjectBucketAccess(projectName)
-      _ <- dbRef.inTransaction { da => da.billingProjectQuery.updateStatus(projectName, Unassigned) }
-    } yield {
-      Success
-    }
+    googleDAO.cleanupDeployment(projectName)
+    dbRef.inTransaction { da =>
+      da.billingProjectQuery.updateStatus(projectName, Unassigned)
+    } map { _ => Success }
   }
 
   //checks Google for status of active operations and figures out what next
@@ -138,8 +131,7 @@ class ProjectCreationMonitor(projectName: String,
       updatedOps
     }
 
-    //now we have some some updated ops; decide how to move forward
-    //note that we only need to check
+    //now we have some some updated ops, decide how to move forward
     updatedOpsF map { ops =>
       if( ops.exists(_.errorMessage.isDefined) ) {
         //fail-fast
@@ -157,8 +149,7 @@ class ProjectCreationMonitor(projectName: String,
 
   def getNextStatusMessage(status: BillingProjectStatus.BillingProjectStatus): ProjectCreationMonitorMessage = {
     status match {
-      case CreatingProject => EnableServices
-      case EnablingServices => CompleteSetup
+      case CreatingProject => CompleteSetup
       case _ => throw new WorkbenchException(s"ProjectCreationMonitor for $projectName called getNextStatusMessage with surprising status $status")
     }
   }

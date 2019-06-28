@@ -14,8 +14,6 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
   val servicesToEnable = Seq("fooService", "barService", "bazService")
 
   var createdProjects: mutable.Set[String] = mutable.Set.empty[String]
-  var enabledProjects: mutable.Set[String] = mutable.Set.empty[String]
-  var bucketedProjects: mutable.Set[String] = mutable.Set.empty[String]
   var polledOpIds: mutable.Set[String] = mutable.Set.empty[String]
   var scrubbedProjects: mutable.Set[String] = mutable.Set.empty[String]
   var deletedProjects: mutable.Set[String] = mutable.Set.empty[String]
@@ -46,17 +44,7 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
     Future.successful(ActiveOperationRecord(projectName, CreatingProject, randomOpName(), done = false, None))
   }
 
-  def enableCloudServices(projectName: String, billingAccount: String): Future[Seq[ActiveOperationRecord]] = {
-    enabledProjects += projectName
-    Future.successful(servicesToEnable map { svc =>
-      ActiveOperationRecord(projectName, EnablingServices, randomOpName(Some(svc)), done = false, None)
-    })
-  }
-
-  def setupProjectBucketAccess(projectName: String): Future[Unit] = {
-    bucketedProjects += projectName
-    Future.successful(())
-  }
+  override def cleanupDeployment(projectName: String): Unit = ()
 
   override def deleteProject(projectName: String): Future[Unit] = {
     deletedProjects += projectName

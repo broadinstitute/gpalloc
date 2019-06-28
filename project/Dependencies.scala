@@ -10,7 +10,7 @@ object Dependencies {
   val scalaTestV    = "3.0.1"
   val slickV        = "3.2.1"
 
-  val workbenchUtilV    = "0.3-f3ce961"
+  val workbenchUtilV    = "0.5-7d46109-SNAP" //https://github.com/broadinstitute/workbench-libs/pull/249
   val workbenchModelV   = "0.9-d722ae2"
   val workbenchGoogleV  = "0.11-7ad0aa8"
   val workbenchMetricsV = "0.3-1b977d7"
@@ -23,8 +23,6 @@ object Dependencies {
   val excludeJacksonCore        = ExclusionRule(organization = "com.fasterxml.jackson.core", name =  "jackson-core")
   val excludeFindbugsJsr        = ExclusionRule(organization = "com.google.code.findbugs", name = "jsr305")
   val excludeHttpComponent      = ExclusionRule(organization = "org.apache.httpcomponents", name = "httpclient")
-
-
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -46,6 +44,8 @@ object Dependencies {
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
   val akkaHttpTestKit: ModuleID =   "com.typesafe.akka"   %%  "akka-http-testkit"    % akkaHttpV % "test"
 
+  val moultingYaml: ModuleID = "net.jcazevedo" %% "moultingyaml" % "0.4.0"
+
   val scalaTest: ModuleID = "org.scalatest" %% "scalatest"    % scalaTestV % "test"
   val mockito: ModuleID =   "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
 
@@ -64,6 +64,7 @@ object Dependencies {
 
   val googleBilling: ModuleID = "com.google.apis" % "google-api-services-cloudbilling" % "v1-rev16-1.23.0" excludeAll(excludeGuavaJDK5)
   val googleDataproc: ModuleID =    "com.google.apis"     % "google-api-services-dataproc" % s"v1-rev91-$googleV" excludeAll(excludeGuavaJDK5, excludeJacksonCore, excludeFindbugsJsr, excludeHttpComponent)
+  val googleDeploymentManager: ModuleID = "com.google.apis"   % "google-api-services-deploymentmanager" % ("v2beta-rev20181207-1.28.0")
   val googleRpc: ModuleID =               "io.grpc" % "grpc-core" % "1.5.0"
 
   val rootDependencies = Seq(
@@ -89,6 +90,8 @@ object Dependencies {
     akkaTestKit,
     akkaHttpTestKit,
 
+    moultingYaml,
+
     scalaTest,
     mockito,
 
@@ -100,6 +103,7 @@ object Dependencies {
 
     googleBilling,
     googleDataproc,
+    googleDeploymentManager,
     googleRpc,
 
     slick,

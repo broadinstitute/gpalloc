@@ -39,8 +39,8 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   import context._
 
-  //Google throttles project creation requests to 1 a second.
-  val projectCreationThrottler = new Throttler(context, gpAllocConfig.projectsPerSecondThrottle, 1.second, "ProjectCreation")
+  //Google throttles project creation requests separately.
+  val projectCreationThrottler = new Throttler(context, gpAllocConfig.projectsThrottle, gpAllocConfig.projectsThrottlePerDuration, "ProjectCreation")
 
   var gpAlloc: GPAllocService = _
 

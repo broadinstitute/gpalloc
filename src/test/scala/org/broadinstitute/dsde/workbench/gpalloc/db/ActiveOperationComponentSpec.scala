@@ -14,7 +14,7 @@ class ActiveOperationComponentSpec extends TestComponent with FlatSpecLike with 
     val newOps = Seq(
       freshOpRecord(newProjectName),
       freshOpRecord(newProjectName),
-      freshOpRecord(newProjectName).copy(operationType = BillingProjectStatus.EnablingServices) )
+      freshOpRecord(newProjectName).copy(operationType = BillingProjectStatus.Assigned) )
     dbFutureValue { _.operationQuery.saveNewOperations(newOps) } shouldEqual newOps
 
     //look for them again
@@ -22,11 +22,11 @@ class ActiveOperationComponentSpec extends TestComponent with FlatSpecLike with 
 
     //look by type
     val opMap = dbFutureValue { _.operationQuery.getActiveOperationsByType(newProjectName) }
-    opMap.keySet should contain theSameElementsAs Seq(BillingProjectStatus.CreatingProject, BillingProjectStatus.EnablingServices)
+    opMap.keySet should contain theSameElementsAs Seq(BillingProjectStatus.CreatingProject, BillingProjectStatus.Assigned)
 
     //scalatest doesn't have a clean way to check containment of map values
     opMap(BillingProjectStatus.CreatingProject) should contain theSameElementsAs newOps.take(2)
-    opMap(BillingProjectStatus.EnablingServices) should contain theSameElementsAs Seq(newOps.last)
+    opMap(BillingProjectStatus.Assigned) should contain theSameElementsAs Seq(newOps.last)
 
     //FK violate if no related bproj
     dbFailure { _.operationQuery.saveNewOperations(Seq(freshOpRecord(newProjectName2))) } shouldBe a [java.sql.BatchUpdateException]
