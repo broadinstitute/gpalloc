@@ -71,18 +71,16 @@ class ProjectCreationMonitor(projectName: String,
     //stop because google said an operation failed
     case Fail(failedOps) =>
       logger.error(s"Creation of new project $projectName failed. These opids died: ${failedOps.map(op => s"id: ${op.operationId}, error: ${op.errorMessage}").mkString(", ")}")
-      throw new MonitorFailedException(projectName) //throw to supervisor
       cleanupOnError()
-      stop(self)
+      throw new MonitorFailedException(projectName) //throw to supervisor. should be the last thing because it breaks control flow!
 
     //stop because something (probably google polling) throw an exception
     case Failure(throwable) =>
       val stackTrace = new StringWriter
       throwable.printStackTrace(new PrintWriter(new StringWriter))
       logger.error(s"Creation of new project $projectName failed because of an exception: ${throwable.getMessage} \n${stackTrace.toString}")
-      throw new MonitorFailedException(projectName) //throw to supervisor
       cleanupOnError()
-      stop(self)
+      throw new MonitorFailedException(projectName) //throw to supervisor. should be the last thing because it breaks control flow!
   }
 
   def cleanupOnError(): Unit = {

@@ -34,6 +34,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
   import profile.api._
 
   val tenMillisPollIntervalConf = gpAllocConfig.copy(projectMonitorPollInterval = 10 millis)
+  val fasterProjectCreationConf = gpAllocConfig.copy(projectsThrottle = 1, projectsThrottlePerDuration = 100 milliseconds)
 
   def withSupervisor[T](gDAO: GoogleDAO, gpAllocConfig: GPAllocConfig = gpAllocConfig)(op: TestActorRef[TestProjectCreationSupervisor] => T): T = {
     val monitorRef = TestActorRef[TestProjectCreationSupervisor](TestProjectCreationSupervisor.props(testBillingAccount, dbRef, gDAO, gpAllocConfig, this))
@@ -131,13 +132,13 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
   it should "create a new project when it's told a monitor fails" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO(pollException = true)
 
-    withSupervisor(mockGoogleDAO) { supervisor =>
-      supervisor ! ProjectCreationSupervisor.CreateProject(newProjectName)
+    withSupervisor(mockGoogleDAO, gpAllocConfig = fasterProjectCreationConf) { supervisor =>
+      supervisor ! ProjectCreationSupervisor.RequestNewProject(newProjectName)
 
       //this will now get into an endless loop of creating a project, google explodes, restart...
       //we'll look for one restart
-
-      eventually {
+      val longer = Timeout(Span(300, Milliseconds))
+      eventually(longer) {
         mockGoogleDAO.createdProjects.size shouldEqual 2
         mockGoogleDAO.deletedProjects should contain(newProjectName)
       }
