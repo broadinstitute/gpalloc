@@ -81,7 +81,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     //fake a billing project
     val newOpRecord = freshOpRecord(newProjectName)
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, newOpRecord, BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    saveProjectAndOps(newProjectName, newOpRecord, BillingProjectStatus.Unassigned) shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(requestingUser) } shouldEqual Some(newProjectName)
 
     //fake the creation time to be "in the past"
@@ -123,6 +123,10 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
   "ProjectCreationMonitor" should "createNewProject" in isolatedDbTest {
     val mockGoogleDAO = new MockGoogleDAO()
+
+    //put the queued project in the db that the monitor will go look for
+    dbFutureValue { _.billingProjectQuery.saveNew(newProjectName) }
+
     val monitor = TestActorRef[ProjectCreationMonitor](ProjectCreationMonitor.props(newProjectName, testBillingAccount, dbRef, mockGoogleDAO, tenMillisPollIntervalConf)).underlyingActor
 
     //tell the monitor to create its project
@@ -149,7 +153,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     //pretend we've already created the project and enabled services
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
+    saveProjectAndOps(newProjectName, createdOp)
     val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=true, operationType = CreatingProject) }
     dbFutureValue { _.operationQuery.saveNewOperations(enablingOps) }
 
@@ -168,7 +172,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     //pretend we've already created the project
     val createdOp = freshOpRecord(newProjectName).copy(done=true)
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
+    saveProjectAndOps(newProjectName, createdOp)
     val enablingOps = mockGoogleDAO.servicesToEnable map { _ => freshOpRecord(newProjectName).copy(done=false, operationType = CreatingProject) }
     dbFutureValue { _.operationQuery.saveNewOperations(enablingOps) }
 
@@ -186,7 +190,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
     //pretend we've already created the project but not polled it yet
     val createdOp = freshOpRecord(newProjectName)
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
+    saveProjectAndOps(newProjectName, createdOp)
 
     val pollResult = monitor.pollForStatus(CreatingProject).futureValue
     pollResult shouldBe a [Fail]
@@ -203,7 +207,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
 
       //pretend we've already created the project but not polled it yet
       val createdOp = freshOpRecord(newProjectName)
-      dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, createdOp) }
+      saveProjectAndOps(newProjectName, createdOp)
 
       supervisor ! RequestNewProject(newProjectName)
 

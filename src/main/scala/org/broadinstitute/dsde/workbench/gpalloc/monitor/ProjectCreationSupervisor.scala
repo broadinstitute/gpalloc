@@ -95,8 +95,9 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
     //otherwise things in the throttle queue are invisible to us, and we create the wrong number of projects.
     dbRef.inTransaction { da =>
       da.billingProjectQuery.saveNew(projectName, BillingProjectStatus.Queued)
+    } flatMap { _ =>
+      addNewProjectToThrottle(projectName)
     }
-    addNewProjectToThrottle(projectName)
   }
 
   def addNewProjectToThrottle(projectName: String): Future[Unit] = {

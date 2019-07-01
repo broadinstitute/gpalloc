@@ -70,7 +70,7 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
 
   it should "save a new project with its ActiveOperationRecord" in isolatedDbTest {
     val newOpRecord = freshOpRecord(newProjectName)
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, newOpRecord) } shouldEqual newProjectName
+    saveProjectAndOps(newProjectName, newOpRecord) shouldEqual newProjectName
     dbFutureValue { _.operationQuery.getOperations(newProjectName) } shouldEqual Seq(newOpRecord)
   }
 
