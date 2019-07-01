@@ -18,7 +18,7 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 object ProjectCreationSupervisor {
-  var gpAllocConfig: GPAllocConfig = ???
+  var gpAllocConfig: GPAllocConfig = null
 
   private def randomProjectName(): String = {
     //strip out things GCP doesn't like in project IDs: uppercase, underscores, and things that are too long
@@ -27,7 +27,12 @@ object ProjectCreationSupervisor {
   }
 
   sealed trait ProjectCreationSupervisorMessage
-  case class RequestNewProject(projectName: String = randomProjectName()) extends ProjectCreationSupervisorMessage
+  case class RequestNewProject(projectName: String) extends ProjectCreationSupervisorMessage
+  object RequestNewProject {
+    def apply(): RequestNewProject = {
+      RequestNewProject(randomProjectName())
+    }
+  }
   case object ResumeAllProjects extends ProjectCreationSupervisorMessage
   case class RegisterGPAllocService(service: GPAllocService) extends ProjectCreationSupervisorMessage
   case object SweepAbandonedProjects extends ProjectCreationSupervisorMessage
@@ -75,7 +80,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   override val supervisorStrategy =
     OneForOneStrategy() {
       case e: MonitorFailedException =>
-        projectMonitoringFailed(e.projectName) //this creates a new project
+        self ! RequestNewProject() //make a new one to replace this broken one
         Stop
       case _ => Restart
     }
@@ -124,14 +129,6 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   def createProject(projectName: String): Unit = {
     val newProjectMonitor = createChildActor(projectName)
     newProjectMonitor ! ProjectCreationMonitor.CreateProject
-  }
-
-  def projectMonitoringFailed(projectName: String): Unit = {
-    for {
-      _ <- dbRef.inTransaction { da => da.billingProjectQuery.updateStatus(projectName, BillingProjectStatus.Deleted) }
-      _ <- googleDAO.deleteProject(projectName)
-    } yield () //one chance
-    self ! RequestNewProject() //make a new one to replace this broken one
   }
 
   def createChildActor(projectName: String): ActorRef = {
