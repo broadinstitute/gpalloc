@@ -72,7 +72,7 @@ trait CommonTestData {
   val gpAllocConfig = config.as[GPAllocConfig]("gpalloc")
 
   def freshBillingProjectRecord(projectName: String): BillingProjectRecord = {
-    BillingProjectRecord(projectName, None, BillingProjectStatus.CreatingProject, None)
+    BillingProjectRecord(projectName, None, BillingProjectStatus.Queued, None)
   }
 
   def assignedBillingProjectRecord(projectName: String, owner: WorkbenchEmail, ago: FiniteDuration): BillingProjectRecord = {

@@ -22,7 +22,7 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     dbFutureValue { _.billingProjectQuery.saveNew(newProjectName2) } shouldEqual newProjectName2
 
     //look for them again
-    dbFutureValue { _.billingProjectQuery.getCreatingProjects } should contain theSameElementsAs Seq(
+    dbFutureValue { _.billingProjectQuery.getPendingProjects } should contain theSameElementsAs Seq(
       freshBillingProjectRecord(newProjectName),
       freshBillingProjectRecord(newProjectName2)
     )
@@ -93,7 +93,7 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
 
     dbFutureValue { _.billingProjectQuery.releaseProject(newProjectName) } shouldEqual 0
 
-    dbFutureValue { _.billingProjectQuery.getCreatingProjects } should contain theSameElementsAs Seq(
+    dbFutureValue { _.billingProjectQuery.getPendingProjects } should contain theSameElementsAs Seq(
       freshBillingProjectRecord(newProjectName),
       freshBillingProjectRecord(newProjectName2)
     )
