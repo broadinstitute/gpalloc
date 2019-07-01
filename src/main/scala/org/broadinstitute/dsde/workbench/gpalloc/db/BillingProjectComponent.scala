@@ -73,24 +73,26 @@ trait BillingProjectComponent extends GPAllocComponent {
       findBillingProject(billingProject).filter(_.status === BillingProjectStatus.Assigned.toString).result.headOption
     }
 
+    def getPendingProjects: DBIO[Seq[BillingProjectRecord]] = {
+      billingProjectQuery.filter(_.status inSetBind BillingProjectStatus.pendingStatuses.map(_.toString) ).result
+    }
+
+    def getQueuedProjects: DBIO[Seq[BillingProjectRecord]] = {
+      billingProjectQuery.filter(_.status === BillingProjectStatus.Queued.toString ).result
+    }
+
     def getCreatingProjects: DBIO[Seq[BillingProjectRecord]] = {
-      billingProjectQuery.filter(_.status inSetBind BillingProjectStatus.creatingStatuses.map(_.toString) ).result
+      billingProjectQuery.filter(_.status === BillingProjectStatus.CreatingProject.toString ).result
     }
 
     def getUnassignedProjects: DBIO[Seq[BillingProjectRecord]] = {
       findUnassignedProjects.result
     }
 
-    def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
+    def saveNew(billingProject: String, status: BillingProjectStatus = BillingProjectStatus.Queued): DBIO[String] = {
       (billingProjectQuery += BillingProjectRecord(billingProject, None, status, None)) map { _ =>
         billingProject
       }
-    }
-
-    def saveNewProject(billingProject: String, operationRecord: ActiveOperationRecord, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): DBIO[String] = {
-      DBIO.seq(
-        saveNew(billingProject, status),
-        operationQuery.saveNewOperations(Seq(operationRecord))) map { _ => billingProject }
     }
 
     def updateStatus(billingProject: String, status: BillingProjectStatus): DBIO[Unit] = {
@@ -155,7 +157,7 @@ trait BillingProjectComponent extends GPAllocComponent {
     //This weird function allows us to ask "do we need to kick off creating any more projects right now?"
     def countUnassignedAndFutureProjects: DBIO[Int] = {
       billingProjectQuery.filter(_.status inSetBind(
-        BillingProjectStatus.creatingStatuses.map(_.toString) ++ Seq(BillingProjectStatus.Unassigned.toString)) )
+        BillingProjectStatus.pendingStatuses.map(_.toString) ++ Seq(BillingProjectStatus.Unassigned.toString)) )
         .length.result
     }
 

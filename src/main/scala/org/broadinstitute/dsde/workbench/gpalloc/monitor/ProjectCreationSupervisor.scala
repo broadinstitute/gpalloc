@@ -8,6 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.config.GPAllocConfig
 import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO, HttpGoogleBillingDAO}
 import org.broadinstitute.dsde.workbench.gpalloc.db.DbReference
+import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor._
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
@@ -39,7 +40,9 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   import context._
 
-  //Google throttles project creation requests separately.
+  /* As soon as a project creation request comes in, it's saved to the db and set to Queued.
+   * Then it goes into this throttle. Once it emerges from the throttle, it will actually be created.
+   */
   val projectCreationThrottler = new Throttler(context, gpAllocConfig.projectsThrottle, gpAllocConfig.projectsThrottlePerDuration, "ProjectCreation")
 
   var gpAlloc: GPAllocService = _
@@ -65,10 +68,21 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   def monitorName(bp: String) = s"$monitorNameBase$bp"
 
   def resumeAllProjects: Future[Unit] = {
-    dbRef.inTransaction { da => da.billingProjectQuery.getCreatingProjects } map { _.foreach { bp =>
-      val newProjectMonitor = createChildActor(bp.billingProjectName)
-      newProjectMonitor ! ProjectCreationMonitor.WakeUp
-    }}
+    dbRef.inTransaction { da =>
+      for {
+        queuedProjects <- da.billingProjectQuery.getQueuedProjects
+        creatingProjects <- da.billingProjectQuery.getCreatingProjects
+      } yield {
+        //Queued projects go back in the throttle, since they never made it to Google land.
+        queuedProjects.foreach(qp => addNewProjectToThrottle(qp.billingProjectName))
+
+        //Creating projects did make it to Google land, so they get monitor actors made for them.
+        creatingProjects.foreach { cp =>
+          val newProjectMonitor = createChildActor(cp.billingProjectName)
+          newProjectMonitor ! ProjectCreationMonitor.WakeUp
+        }
+      }
+    }
   }
 
   def sweepAssignedProjects(): Unit = {
@@ -77,6 +91,17 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   }
 
   def requestNewProject(projectName: String): Future[Unit] = {
+    //telling the db immediately means we can get an accurate handle on the number projects that are in flight.
+    //otherwise things in the throttle queue are invisible to us, and we create the wrong number of projects.
+    dbRef.inTransaction { da =>
+      da.billingProjectQuery.saveNew(projectName, BillingProjectStatus.Queued)
+    } flatMap { _ =>
+      addNewProjectToThrottle(projectName)
+    }
+  }
+
+  def addNewProjectToThrottle(projectName: String): Future[Unit] = {
+    logger.info(s"Request to create $projectName goes into the throttle.")
     projectCreationThrottler.throttle( () => Future.successful(createProject(projectName)) )
   }
 

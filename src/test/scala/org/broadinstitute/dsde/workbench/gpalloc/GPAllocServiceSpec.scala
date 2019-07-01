@@ -30,7 +30,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
   "GPAllocService" should "request an existing google project" in isolatedDbTest {
     //add an unassigned project to find
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
 
     //make a service with a project creation threshold of 1 to trigger making a new one once this one is alloc'd
@@ -66,8 +66,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   }
 
   it should "not keep creating projects indefinitely if enough creating ones are in-flight" in isolatedDbTest {
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName2
+    dbFutureValue { _.billingProjectQuery.saveNew(newProjectName, BillingProjectStatus.Queued) } shouldEqual newProjectName
+    saveProjectAndOps(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.CreatingProject) shouldEqual newProjectName2
     val (gpAlloc, probe, _) = gpAllocService(dbRef, 2)
 
     //maybeCreateNewProjects shouldn't create projects here because we've got 2 being created
@@ -76,7 +76,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
   it should "barf when you request a google project but there are none in the pool" in isolatedDbTest {
     //make a service with a project creation threshold of 1 to trigger making a new one once this one is alloc'd
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
     val (gpAlloc, probe, _) = gpAllocService(dbRef, 1)
 
@@ -98,8 +98,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
   it should "only ask the supervisor to create a project when below the threshold" in isolatedDbTest {
     //add two unassigned projects to the pool
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
+    saveProjectAndOps(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) shouldEqual newProjectName2
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 2
 
     //after assigning a project, we'll have 1 left, so a threshold of 1 means we shouldn't create another
@@ -118,7 +118,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
   it should "release a project" in isolatedDbTest {
     //add one to find and assign it to the test user
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
@@ -139,7 +139,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
   it should "check permissions when releasing a project" in isolatedDbTest {
     //add one to find and assign it to the test user
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 1
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
@@ -165,7 +165,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
   it should "not let you release a project that's not assigned" in isolatedDbTest {
     //add an unassigned one
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.CreatingProject) } shouldEqual newProjectName
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.CreatingProject) shouldEqual newProjectName
 
     //here we have no minimum free projects. it's okay for us to just run out
     //this is completely unrealistic but means we have to jump through fewer hoops in the test
@@ -198,9 +198,9 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   }
 
   it should "return statistics" in isolatedDbTest {
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Assigned) } shouldEqual newProjectName2
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
+    saveProjectAndOps(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Assigned) shouldEqual newProjectName2
+    saveProjectAndOps(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) shouldEqual newProjectName3
 
     val (gpAlloc, _, _) = gpAllocService(dbRef, 1)
     val stats = gpAlloc.dumpStats().futureValue
@@ -208,9 +208,9 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   }
 
   it should "force cleanup of all unassigned projects" in isolatedDbTest {
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
+    saveProjectAndOps(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) shouldEqual newProjectName2
+    saveProjectAndOps(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) shouldEqual newProjectName3
 
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 1)
     gpAlloc.forceCleanupAll().futureValue
@@ -221,9 +221,9 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   }
 
   it should "delete projects" in isolatedDbTest {
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
+    saveProjectAndOps(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) shouldEqual newProjectName2
+    saveProjectAndOps(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) shouldEqual newProjectName3
 
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 1)
 
@@ -244,9 +244,9 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
   }
 
   it should "delete all projects" in isolatedDbTest {
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) } shouldEqual newProjectName
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) } shouldEqual newProjectName2
-    dbFutureValue { _.billingProjectQuery.saveNewProject(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) } shouldEqual newProjectName3
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
+    saveProjectAndOps(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) shouldEqual newProjectName2
+    saveProjectAndOps(newProjectName3, freshOpRecord(newProjectName3), BillingProjectStatus.Assigned) shouldEqual newProjectName3
 
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 1)
 

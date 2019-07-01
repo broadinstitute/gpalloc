@@ -12,11 +12,11 @@ import scala.language.implicitConversions
 
 object BillingProjectStatus extends Enumeration {
   type BillingProjectStatus = Value
-  val CreatingProject, Unassigned, Assigned, Deleted = Value
-  val creatingStatuses = Seq(CreatingProject)
+  val Queued, CreatingProject, Unassigned, Assigned, Deleted = Value
+  val pendingStatuses = Seq(Queued, CreatingProject) //this project is coming, someday in the future.
 
   class StatusValue(status: BillingProjectStatus) {
-    def isCreating = creatingStatuses.contains(status)
+    def isPending = pendingStatuses.contains(status)
   }
 
   implicit def enumConvert(status: BillingProjectStatus): StatusValue = new StatusValue(status)

@@ -3,6 +3,8 @@ package org.broadinstitute.dsde.workbench.gpalloc.db
 import akka.actor.{Actor, ActorContext, ActorSystem, Props}
 import akka.testkit.TestActorRef
 import org.broadinstitute.dsde.workbench.gpalloc.TestExecutionContext
+import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
+import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.scalatest.Matchers
 import org.scalatest.concurrent.ScalaFutures
@@ -32,6 +34,15 @@ trait TestComponent extends Matchers with ScalaFutures
       case t: Throwable => t.printStackTrace(); throw t
     } finally {
       dbFutureValue { _ => DbSingleton.ref.dataAccess.truncateAll() }
+    }
+  }
+
+  // populate a new project and some records
+  def saveProjectAndOps(billingProject: String, operationRecord: ActiveOperationRecord, status: BillingProjectStatus = BillingProjectStatus.CreatingProject): String = {
+    dbFutureValue { da =>
+      DBIO.seq(
+        da.billingProjectQuery.saveNew(billingProject, status),
+        da.operationQuery.saveNewOperations(Seq(operationRecord))) map { _ => billingProject }
     }
   }
 
