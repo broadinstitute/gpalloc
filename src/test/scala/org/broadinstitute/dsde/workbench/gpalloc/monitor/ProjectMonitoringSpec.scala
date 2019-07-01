@@ -100,11 +100,12 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
   }
 
   it should "throttle project creation" in isolatedDbTest {
-    val mockGoogleDAO = new MockGoogleDAO()
+    val mockGoogleDAO = new MockGoogleDAO(operationsDoneYet = false)
     withSupervisor(mockGoogleDAO) { supervisor =>
 
       //kick off two project creates. the throttle should kick in
       supervisor ! RequestNewProject(newProjectName)
+      Thread.sleep(100) //make sure the messages are delivered in order
       supervisor ! RequestNewProject(newProjectName2)
 
       eventually(timeout = Timeout(Span(2, Seconds))) {
