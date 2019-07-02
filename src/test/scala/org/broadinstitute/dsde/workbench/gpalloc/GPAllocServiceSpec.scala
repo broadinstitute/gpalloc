@@ -5,7 +5,7 @@ import akka.testkit.{TestActorRef, TestKit, TestProbe}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference, DbSingleton, TestComponent}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RequestNamedProject, RegisterGPAllocService}
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RequestNewProject, RegisterGPAllocService}
 import org.broadinstitute.dsde.workbench.gpalloc.service.{GPAllocService, GoogleProjectNotFound, NoGoogleProjectAvailable, NotYourGoogleProject}
 import org.broadinstitute.dsde.workbench.util.NoopActor
 import org.scalatest.FlatSpecLike
@@ -41,7 +41,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[RequestNamedProject])
+    probe.expectMsg(1 seconds, RequestNewProject)
 
     //no more unassigned projects!
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
@@ -52,8 +52,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[RequestNamedProject])
-    probe.expectMsgClass(1 seconds, classOf[RequestNamedProject])
+    probe.expectMsg(1 seconds, RequestNewProject)
+    probe.expectMsg(1 seconds, RequestNewProject)
   }
 
   it should "create projects up to the baseline minimum number" in isolatedDbTest {
@@ -61,8 +61,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[RequestNamedProject])
-    probe.expectMsgClass(1 seconds, classOf[RequestNamedProject])
+    probe.expectMsg(1 seconds, RequestNewProject)
+    probe.expectMsg(1 seconds, RequestNewProject)
   }
 
   it should "not keep creating projects indefinitely if enough creating ones are in-flight" in isolatedDbTest {
@@ -86,7 +86,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[RequestNamedProject])
+    probe.expectMsg(1 seconds, RequestNewProject)
 
     //give me another! no :(
     val noProjectExc = gpAlloc.requestGoogleProject(userInfo).failed.futureValue
