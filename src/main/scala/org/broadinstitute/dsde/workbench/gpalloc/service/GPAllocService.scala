@@ -178,7 +178,7 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   //create new google project if we don't have any available
-  private def maybeCreateNewProjects(): Unit = {
+  protected def maybeCreateNewProjects(): Unit = {
     dbRef.inTransaction { da =>
       for {
         free <- da.billingProjectQuery.countUnassignedAndFutureProjects
@@ -196,9 +196,7 @@ class GPAllocService(protected val dbRef: DbReference,
     }
   }
 
-  private def createNewGoogleProject(): Unit = {
-    //strip out things GCP doesn't like in project IDs: uppercase, underscores, and things that are too long
-    val sanitizedPrefix = gpAllocConfig.projectPrefix.toLowerCase.replaceAll("[^a-z0-9-]", "").take(22)
-    projectCreationSupervisor ! RequestNewProject(s"$sanitizedPrefix-${Random.alphanumeric.take(7).mkString.toLowerCase}")
+  def createNewGoogleProject(): Unit = {
+    projectCreationSupervisor ! RequestNewProject
   }
 }

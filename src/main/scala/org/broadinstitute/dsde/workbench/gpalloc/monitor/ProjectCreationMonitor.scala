@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, Data
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus._
 import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationMonitor._
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.ProjectMonitoringFailed
 import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import slick.dbio.DBIO
@@ -39,6 +40,8 @@ object ProjectCreationMonitor {
     Props(new ProjectCreationMonitor(projectName, billingAccountId, dbRef, googleDAO, gpAllocConfig))
   }
 }
+
+class MonitorFailedException(val projectName: String) extends RuntimeException {}
 
 class ProjectCreationMonitor(projectName: String,
                              billingAccountId: String,
@@ -69,7 +72,7 @@ class ProjectCreationMonitor(projectName: String,
     case Fail(failedOps) =>
       logger.error(s"Creation of new project $projectName failed. These opids died: ${failedOps.map(op => s"id: ${op.operationId}, error: ${op.errorMessage}").mkString(", ")}")
       cleanupOnError()
-      stop(self)
+      throw new MonitorFailedException(projectName) //throw to supervisor. should be the last thing because it breaks control flow!
 
     //stop because something (probably google polling) throw an exception
     case Failure(throwable) =>
@@ -77,7 +80,7 @@ class ProjectCreationMonitor(projectName: String,
       throwable.printStackTrace(new PrintWriter(new StringWriter))
       logger.error(s"Creation of new project $projectName failed because of an exception: ${throwable.getMessage} \n${stackTrace.toString}")
       cleanupOnError()
-      stop(self)
+      throw new MonitorFailedException(projectName) //throw to supervisor. should be the last thing because it breaks control flow!
   }
 
   def cleanupOnError(): Unit = {

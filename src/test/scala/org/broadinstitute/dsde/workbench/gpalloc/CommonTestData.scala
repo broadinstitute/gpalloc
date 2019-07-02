@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerC
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{ActiveOperationRecord, BillingProjectRecord, DbReference, DbSingleton}
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, BillingProjectStatus}
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor
 import org.broadinstitute.dsde.workbench.gpalloc.service.GPAllocService
 import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.util.NoopActor

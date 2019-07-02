@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.gpalloc.monitor
 
-import akka.actor.SupervisorStrategy.Restart
+import akka.actor.SupervisorStrategy.{Restart, Stop}
 import akka.actor.{Actor, ActorRef, OneForOneStrategy, PoisonPill, Props, SupervisorStrategy}
 import akka.contrib.throttle.TimerBasedThrottler
 import akka.contrib.throttle.Throttler.{RateInt, SetTarget}
@@ -15,13 +15,16 @@ import org.broadinstitute.dsde.workbench.gpalloc.util.Throttler
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Random
 
 object ProjectCreationSupervisor {
   sealed trait ProjectCreationSupervisorMessage
-  case class RequestNewProject(projectName: String) extends ProjectCreationSupervisorMessage
+  case object RequestNewProject extends ProjectCreationSupervisorMessage
+  case class RequestNamedProject(projectName: String) extends ProjectCreationSupervisorMessage //for testing only
   case object ResumeAllProjects extends ProjectCreationSupervisorMessage
   case class RegisterGPAllocService(service: GPAllocService) extends ProjectCreationSupervisorMessage
   case object SweepAbandonedProjects extends ProjectCreationSupervisorMessage
+  case class ProjectMonitoringFailed(projectName: String) extends ProjectCreationSupervisorMessage
 
   //secret message that only we send to ourselves
   protected[monitor] case class CreateProject(projectName: String) extends ProjectCreationSupervisorMessage
@@ -47,8 +50,16 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   var gpAlloc: GPAllocService = _
 
+  private def randomProjectName(): String = {
+    //strip out things GCP doesn't like in project IDs: uppercase, underscores, and things that are too long
+    val sanitizedPrefix = gpAllocConfig.projectPrefix.toLowerCase.replaceAll("[^a-z0-9-]", "").take(22)
+    s"$sanitizedPrefix-${Random.alphanumeric.take(7).mkString.toLowerCase}"
+  }
+
   override def receive: PartialFunction[Any, Unit] = {
-    case RequestNewProject(projectName) =>
+    case RequestNewProject =>
+      requestNewProject(randomProjectName())
+    case RequestNamedProject(projectName) =>
       requestNewProject(projectName)
     case CreateProject(projectName) =>
       createProject(projectName)
@@ -62,7 +73,13 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   }
 
   //if a project creation monitor dies, restart it
-  override val supervisorStrategy: SupervisorStrategy = OneForOneStrategy() { case _ => Restart }
+  override val supervisorStrategy =
+    OneForOneStrategy() {
+      case e: MonitorFailedException =>
+        self ! RequestNewProject //make a new one to replace this broken one
+        Stop
+      case _ => Restart
+    }
 
   val monitorNameBase = "bpmon-"
   def monitorName(bp: String) = s"$monitorNameBase$bp"

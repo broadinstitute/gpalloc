@@ -41,7 +41,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+    probe.expectMsg(1 seconds, RequestNewProject)
 
     //no more unassigned projects!
     dbFutureValue { _.billingProjectQuery.countUnassignedProjects } shouldBe 0
@@ -52,8 +52,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
-    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+    probe.expectMsg(1 seconds, RequestNewProject)
+    probe.expectMsg(1 seconds, RequestNewProject)
   }
 
   it should "create projects up to the baseline minimum number" in isolatedDbTest {
@@ -61,8 +61,8 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
-    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+    probe.expectMsg(1 seconds, RequestNewProject)
+    probe.expectMsg(1 seconds, RequestNewProject)
   }
 
   it should "not keep creating projects indefinitely if enough creating ones are in-flight" in isolatedDbTest {
@@ -86,7 +86,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
 
     //should hit the threshold and ask the supervisor to create a project
     //(but this won't really do anything because the supervisor is a fake)
-    probe.expectMsgClass(1 seconds, classOf[RequestNewProject])
+    probe.expectMsg(1 seconds, RequestNewProject)
 
     //give me another! no :(
     val noProjectExc = gpAlloc.requestGoogleProject(userInfo).failed.futureValue
