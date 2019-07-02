@@ -72,8 +72,6 @@ trait CommonTestData {
   val swaggerConfig = config.as[SwaggerConfig]("swagger")
   val gpAllocConfig = config.as[GPAllocConfig]("gpalloc")
 
-  ProjectCreationSupervisor.gpAllocConfig = gpAllocConfig
-
   def freshBillingProjectRecord(projectName: String): BillingProjectRecord = {
     BillingProjectRecord(projectName, None, BillingProjectStatus.Queued, None)
   }

@@ -55,7 +55,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     val mockGoogleDAO = new MockGoogleDAO()
 
     withSupervisor(mockGoogleDAO) { supervisor =>
-      supervisor ! RequestNewProject(newProjectName)
+      supervisor ! RequestNamedProject(newProjectName)
 
       //we're now racing against the project monitor actor, so everything from here on is eventually
       eventually {
@@ -111,9 +111,9 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     withSupervisor(mockGoogleDAO) { supervisor =>
 
       //kick off two project creates. the throttle should kick in
-      supervisor ! RequestNewProject(newProjectName)
+      supervisor ! RequestNamedProject(newProjectName)
       Thread.sleep(100) //make sure the messages are delivered in order
-      supervisor ! RequestNewProject(newProjectName2)
+      supervisor ! RequestNamedProject(newProjectName2)
 
       eventually(timeout = Timeout(Span(2, Seconds))) {
         dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) }.get.status shouldBe CreatingProject
@@ -133,7 +133,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
     val mockGoogleDAO = new MockGoogleDAO(pollException = true)
 
     withSupervisor(mockGoogleDAO, gpAllocConfig = fasterProjectCreationConf) { supervisor =>
-      supervisor ! ProjectCreationSupervisor.RequestNewProject(newProjectName)
+      supervisor ! ProjectCreationSupervisor.RequestNamedProject(newProjectName)
 
       //this will now get into an endless loop of creating a project, google explodes, restart...
       //we'll look for one restart
@@ -233,7 +233,7 @@ class ProjectMonitoringSpec extends TestKit(ActorSystem("gpalloctest")) with Tes
       val createdOp = freshOpRecord(newProjectName)
       saveProjectAndOps(newProjectName, createdOp)
 
-      supervisor ! RequestNewProject(newProjectName)
+      supervisor ! RequestNamedProject(newProjectName)
 
       expectMsgClass(1 second, classOf[Terminated])
     }

@@ -197,6 +197,6 @@ class GPAllocService(protected val dbRef: DbReference,
   }
 
   def createNewGoogleProject(): Unit = {
-    projectCreationSupervisor ! RequestNewProject()
+    projectCreationSupervisor ! RequestNewProject
   }
 }

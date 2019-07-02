@@ -18,21 +18,9 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 object ProjectCreationSupervisor {
-  var gpAllocConfig: GPAllocConfig = null
-
-  private def randomProjectName(): String = {
-    //strip out things GCP doesn't like in project IDs: uppercase, underscores, and things that are too long
-    val sanitizedPrefix = gpAllocConfig.projectPrefix.toLowerCase.replaceAll("[^a-z0-9-]", "").take(22)
-    s"$sanitizedPrefix-${Random.alphanumeric.take(7).mkString.toLowerCase}"
-  }
-
   sealed trait ProjectCreationSupervisorMessage
-  case class RequestNewProject(projectName: String) extends ProjectCreationSupervisorMessage
-  object RequestNewProject {
-    def apply(): RequestNewProject = {
-      RequestNewProject(randomProjectName())
-    }
-  }
+  case object RequestNewProject extends ProjectCreationSupervisorMessage
+  case class RequestNamedProject(projectName: String) extends ProjectCreationSupervisorMessage //for testing only
   case object ResumeAllProjects extends ProjectCreationSupervisorMessage
   case class RegisterGPAllocService(service: GPAllocService) extends ProjectCreationSupervisorMessage
   case object SweepAbandonedProjects extends ProjectCreationSupervisorMessage
@@ -62,8 +50,16 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
 
   var gpAlloc: GPAllocService = _
 
+  private def randomProjectName(): String = {
+    //strip out things GCP doesn't like in project IDs: uppercase, underscores, and things that are too long
+    val sanitizedPrefix = gpAllocConfig.projectPrefix.toLowerCase.replaceAll("[^a-z0-9-]", "").take(22)
+    s"$sanitizedPrefix-${Random.alphanumeric.take(7).mkString.toLowerCase}"
+  }
+
   override def receive: PartialFunction[Any, Unit] = {
-    case RequestNewProject(projectName) =>
+    case RequestNewProject =>
+      requestNewProject(randomProjectName())
+    case RequestNamedProject(projectName) =>
       requestNewProject(projectName)
     case CreateProject(projectName) =>
       createProject(projectName)
@@ -80,7 +76,7 @@ class ProjectCreationSupervisor(billingAccount: String, dbRef: DbReference, goog
   override val supervisorStrategy =
     OneForOneStrategy() {
       case e: MonitorFailedException =>
-        self ! RequestNewProject() //make a new one to replace this broken one
+        self ! RequestNewProject //make a new one to replace this broken one
         Stop
       case _ => Restart
     }
