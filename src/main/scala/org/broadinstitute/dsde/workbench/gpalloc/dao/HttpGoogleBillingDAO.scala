@@ -217,14 +217,24 @@ class HttpGoogleBillingDAO(appName: String,
     ConfigContents(Seq(Resources(projectName, dmTemplatePath, properties))).toYaml.prettyPrint
   }
 
+  protected def whenDeploymentDeleteConflict(throwable: Throwable): Boolean = {
+    throwable match {
+      case t: GoogleJsonResponseException => t.getStatusCode == 409
+      case _ => false
+    }
+  }
+
   /*
  * Set the deployment policy to "abandon" -- i.e. allows the created project to persist even if the deployment is deleted --
  * and then delete the deployment. There's a limit of 1000 deployments so this is important to do.
  */
-  override def cleanupDeployment(projectName: String): Unit = {
+  override def cleanupDeployment(projectName: String): Future[Unit] = {
     if( cleanupDeploymentAfterCreating ) {
-      executeGoogleRequest(
+      retryExponentially(whenDeploymentDeleteConflict) { () => Future(blocking(executeGoogleRequest(
         deploymentManager.deployments().delete(deploymentMgrProject, projectToDM(projectName)).setDeletePolicy("ABANDON"))
+      ))} map ( _ => () )
+    } else {
+      Future.successful(())
     }
   }
 

@@ -44,7 +44,7 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
     Future.successful(ActiveOperationRecord(projectName, CreatingProject, randomOpName(), done = false, None))
   }
 
-  override def cleanupDeployment(projectName: String): Unit = ()
+  override def cleanupDeployment(projectName: String): Future[Unit] = Future.successful(())
 
   override def deleteProject(projectName: String): Future[Unit] = {
     deletedProjects += projectName
