@@ -191,6 +191,7 @@ class HttpGoogleBillingDAO(appName: String,
     for {
       googleProject <- getGoogleProject(projectName)
       _ <- cleanupClusters(projectName)
+      _ <- cleanupVMs(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupPets(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
@@ -451,7 +452,7 @@ class HttpGoogleBillingDAO(appName: String,
   }
 
   // Leonardo currently only creates clusters in the region us-central1. If it were to start supporting other regions, this should be updated.
-  def cleanupClusters(projectName: String): Future[Unit] = {
+  def cleanupClusters(projectName: String): Future[Unit] =
     for {
       result <- googleRq(dataproc.projects().regions().clusters().list(projectName, "us-central1"))
       googleClusters = googNull(result.getClusters)
@@ -462,10 +463,18 @@ class HttpGoogleBillingDAO(appName: String,
           case ge: GoogleJsonResponseException if ge.getStatusCode == 400 && ge.getMessage.contains("while it has other pending delete operations") =>
         }
       }
-    } yield {
-      //nah
-    }
-  }
+    } yield {}
+
+  // Leonardo currently only created GCE VMs in zone us-central1-a. If it were to start supporting other zones, this will need to be updated.
+  def cleanupVMs(projectName: String): Future[Unit] =
+    for {
+      result <- googleRq(computeManager.instances().list(projectName, "us-central1-a"))
+      instances = googNull(result.getItems)
+      instanceNames = instances.map(i => i.getName)
+      _ <- sequentially(instanceNames) { instanceName =>
+        googleRq(computeManager.instances().delete(projectName, "us-central1-a", instanceName))
+      }
+    } yield {}
 
 
   protected def createStorageLogsBucket(billingProjectName: String): Future[String] = {
