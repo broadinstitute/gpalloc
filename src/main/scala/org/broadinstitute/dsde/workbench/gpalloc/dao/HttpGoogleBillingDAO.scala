@@ -472,10 +472,12 @@ class HttpGoogleBillingDAO(appName: String,
       instances = googNull(result.getItems)
       instanceNames = instances.map(i => i.getName)
       _ <- sequentially(instanceNames) { instanceName =>
-        googleRq(computeManager.instances().delete(projectName, "us-central1-a", instanceName)).recover {
+        googleRq(computeManager.instances().delete(projectName, "us-central1-a", instanceName))
+        googleRq(computeManager.instances().delete(projectName, "us-central1-a", instanceName))
+          //.recover {
           // ignore errors on already deleting clusters
-          case ge: GoogleJsonResponseException if ge.getStatusCode == 400 && ge.getMessage.contains("while it has other pending delete operations") =>
-        }
+          //case ge: GoogleJsonResponseException if ge.getStatusCode == 400 && ge.getMessage.contains("while it has other pending delete operations") =>
+        //}
       }
     } yield {}
 
