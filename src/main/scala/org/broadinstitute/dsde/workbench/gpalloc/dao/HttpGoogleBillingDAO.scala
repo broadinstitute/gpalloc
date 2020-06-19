@@ -192,6 +192,7 @@ class HttpGoogleBillingDAO(appName: String,
       googleProject <- getGoogleProject(projectName)
       _ <- cleanupClusters(projectName)
       _ <- cleanupVMs(projectName)
+      _ <- cleanupDisks(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupPets(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
@@ -476,6 +477,16 @@ class HttpGoogleBillingDAO(appName: String,
       }
     } yield {}
 
+  // Leonardo currently only creates PDs in zone us-central1-a. If it were to start supporting other zones, this will need to be updated.
+  def cleanupDisks(projectName: String): Future[Unit] =
+    for {
+      result <- googleRq(computeManager.disks().list(projectName, "us-central1-a"))
+      disks = googNull(result.getItems)
+      diskNames = disks.map(i => i.getName)
+      _ <- sequentially(diskNames) { diskName =>
+        googleRq(computeManager.disks().delete(projectName, "us-central1-a", diskName))
+      }
+    } yield {}
 
   protected def createStorageLogsBucket(billingProjectName: String): Future[String] = {
     val bucketName = s"storage-logs-$billingProjectName"
