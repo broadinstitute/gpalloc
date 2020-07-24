@@ -134,7 +134,7 @@ trait BillingProjectComponent extends GPAllocComponent {
       */
     def assignProjectFromPool(owner: String): DBIO[Option[String]] = {
       //query for a billing project that's free
-      val freeBillingProject = findUnassignedProjects.take(1).forUpdate
+      val freeBillingProject = findUnassignedProjects.sortBy(_.lastAssignedTime.asc).take(1).forUpdate
 
       //update it to be assigned to this owner
       freeBillingProject.result flatMap { bps: Seq[BillingProjectRecord] =>
