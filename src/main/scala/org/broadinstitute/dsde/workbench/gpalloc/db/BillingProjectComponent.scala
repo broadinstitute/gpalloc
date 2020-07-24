@@ -172,8 +172,8 @@ trait BillingProjectComponent extends GPAllocComponent {
     def releaseProject(billingProject: String): DBIO[Int] = {
       findBillingProject(billingProject)
         .filter(_.status === BillingProjectStatus.Assigned.toString)
-        .map(bp => (bp.owner, bp.status, bp.lastAssignedTime))
-        .update(None, BillingProjectStatus.Unassigned.toString, BillingProjectRecord.tsToDB(None))
+        .map(bp => (bp.owner, bp.status))
+        .update(None, BillingProjectStatus.Unassigned.toString)
     }
 
     //Entirely forgets that this project ever existed.
