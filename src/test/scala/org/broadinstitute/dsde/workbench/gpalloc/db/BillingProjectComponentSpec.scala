@@ -79,9 +79,11 @@ class BillingProjectComponentSpec extends TestComponent with FlatSpecLike with C
     dbFutureValue { _.billingProjectQuery.saveNew(newProjectName2, BillingProjectStatus.CreatingProject) } shouldEqual newProjectName2
 
     dbFutureValue { _.billingProjectQuery.assignProjectFromPool(requestingUser) } shouldEqual Some(newProjectName)
+    // lastAssignedTime should not reset when a project is released
+    val lastAssigned = dbFutureValue( _.billingProjectQuery.getBillingProject(newProjectName)).map(_.lastAssignedTime)
     dbFutureValue { _.billingProjectQuery.releaseProject(newProjectName) } shouldEqual 1
 
-    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.Unassigned, None))
+    dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName) } shouldEqual Some(BillingProjectRecord(newProjectName, None, BillingProjectStatus.Unassigned, lastAssigned))
 
     //ensure the other one wasn't harmed
     dbFutureValue { _.billingProjectQuery.getBillingProject(newProjectName2) } shouldEqual Some(BillingProjectRecord(newProjectName2, None, BillingProjectStatus.CreatingProject, None))
