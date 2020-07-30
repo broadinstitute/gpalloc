@@ -28,7 +28,8 @@ package object config {
       config.as[FiniteDuration]("projectsThrottlePerDuration"),
       config.as[Int]("opsThrottle"),
       config.as[FiniteDuration]("opsThrottlePerDuration"),
-      config.as[String]("projectPrefix")
+      config.as[String]("projectPrefix"),
+      config.as[Int]("maxPets")
     )
   }
 }

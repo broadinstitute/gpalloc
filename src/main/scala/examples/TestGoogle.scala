@@ -52,7 +52,8 @@ object TestGoogle extends App {
       dmConfig.getBoolean("cleanupDeploymentAfterCreating"),
       dmConfig.getString("requesterPaysRole"), //organizations/{{$orgId}}/roles/RequesterPays
       gpAllocConfig.opsThrottle,
-      gpAllocConfig.opsThrottlePerDuration)
+      gpAllocConfig.opsThrottlePerDuration,
+      gpAllocConfig.maxPets)
 
     val projectName = "gpalloc-dev-develop-sywr9jt"
 

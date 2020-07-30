@@ -13,5 +13,6 @@ case class GPAllocConfig(
                           projectsThrottlePerDuration: FiniteDuration,
                           opsThrottle: Int,
                           opsThrottlePerDuration: FiniteDuration,
-                          projectPrefix: String
+                          projectPrefix: String,
+                          maxPets: Int
                         )

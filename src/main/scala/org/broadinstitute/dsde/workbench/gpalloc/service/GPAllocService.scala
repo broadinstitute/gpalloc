@@ -78,13 +78,13 @@ class GPAllocService(protected val dbRef: DbReference,
         //nuke the billing project if no auth failures.
         //onComplete will return the original future, i.e. authCheck, and not wait for onComplete to complete.
         //we're kicking off this work but not monitoring it.
-        val scrub = for {
-          _ <- googleBillingDAO.scrubBillingProject(project)
-          _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
+        val cleanup = for {
+          overPetLimit <- googleBillingDAO.overPetLimit(project)
+          _ <- if (overPetLimit) nukeProject(project) else releaseProjectInternal(project)
         } yield {
-          logger.info(s"successfully released ${if(becauseAbandoned) "abandoned " else ""}project $project")
+          logger.info(s"successfully ${ if(overPetLimit) "nuked" else "released" } ${ if(becauseAbandoned) "abandoned" else "" } project $project")
         }
-        scrub.onComplete {
+        cleanup.onComplete {
           case Failure(e) => logger.error(s"releaseGoogleProject failed for $project", e)
           case Success(_) => //meh
         }
@@ -121,8 +121,8 @@ class GPAllocService(protected val dbRef: DbReference,
       //the below future will fail if the project is already assigned to someone else.
       //that's okay -- we don't want to clean it up in that case.
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.maybeRacyAssignProjectToOwner("gpalloc@cleaning.up", project) }
-      _ <- googleBillingDAO.scrubBillingProject(project)
-      _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
+      overPetLimit <- googleBillingDAO.overPetLimit(project)
+      _ <- if (overPetLimit) nukeProject(project) else releaseProjectInternal(project)
     } yield ()
     cleanup.onComplete {
       case Failure(RacyProjectsException) => logger.info(s"forceCleanup of $project because someone owns it")
@@ -130,6 +130,13 @@ class GPAllocService(protected val dbRef: DbReference,
       case Success(_) => logger.info(s"successful forceCleanup of $project")
     }
     cleanup
+  }
+
+  private def releaseProjectInternal(project: String): Future[Unit] = {
+    for {
+      _ <- googleBillingDAO.scrubBillingProject(project)
+      _ <- dbRef.inTransaction { dataAccess => dataAccess.billingProjectQuery.releaseProject(project) }
+    } yield ()
   }
 
   def forceCleanupAll(): Future[Unit] = {

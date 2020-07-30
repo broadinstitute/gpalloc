@@ -50,4 +50,6 @@ class MockGoogleDAO(operationsReturnError: Boolean = false, operationsDoneYet: B
     deletedProjects += projectName
     Future.successful(())
   }
+
+  override def overPetLimit(projectName: String): Future[Boolean] = Future.successful(false)
 }
