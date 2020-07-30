@@ -280,7 +280,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     dbFutureValue { _.billingProjectQuery.listEverything() } shouldEqual Seq()
   }
 
-  it should "delete projects with too many pets when they are forcefully cleaned up" in {
+  it should "delete projects with too many pets when they are forcefully cleaned up" in isolatedDbTest {
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, googleDAO = new TooManyPetsGoogleDAO(Set(newProjectName2)))
     saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
     saveProjectAndOps(newProjectName, freshOpRecord(newProjectName2), BillingProjectStatus.Assigned) shouldEqual newProjectName2
