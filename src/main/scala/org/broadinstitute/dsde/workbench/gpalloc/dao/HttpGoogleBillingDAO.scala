@@ -87,7 +87,8 @@ class HttpGoogleBillingDAO(appName: String,
                            cleanupDeploymentAfterCreating: Boolean,
                            requesterPaysRole: String,
                            opsThrottle: Int,
-                           opsThrottlePerDuration: FiniteDuration)
+                           opsThrottlePerDuration: FiniteDuration,
+                           maxPets: Int)
                            (implicit val system: ActorSystem, val executionContext: ExecutionContext)
   extends GoogleDAO with GoogleUtilities {
 
@@ -194,7 +195,6 @@ class HttpGoogleBillingDAO(appName: String,
       _ <- cleanupVMs(projectName)
       _ <- cleanupDisks(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
-      _ <- cleanupPets(projectName)
       _ <- cleanupCromwellAuthBucket(projectName)
       _ <- updateGoogleBillingInfo(projectName, defaultBillingAccount)
     } yield {
@@ -442,13 +442,12 @@ class HttpGoogleBillingDAO(appName: String,
     retryForPetDeletion(() => executeGoogleRequest(op))
   }
 
-  protected def cleanupPets(projectName: String): Future[Unit] = {
+  def overPetLimit(projectName: String): Future[Boolean] = {
     for {
       serviceAccounts <- googleRq( iam.projects().serviceAccounts().list(gProjectPath(projectName)) )
       pets = googNull(serviceAccounts.getAccounts).filter(_.getEmail.contains(s"@$projectName.iam.gserviceaccount.com"))
-      _ <- sequentially(pets) { pet => petGoogleRq( iam.projects.serviceAccounts.delete(pet.getName) ) }
     } yield {
-      //nah
+      pets.size > maxPets
     }
   }
 
