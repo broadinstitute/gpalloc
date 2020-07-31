@@ -288,7 +288,7 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     gpAlloc.forceCleanupAll()
     eventually {
       mockGoogleDAO.deletedProjects shouldBe Set(newProjectName)
+      mockGoogleDAO.scrubbedProjects shouldBe Set(newProjectName2)
     }
-    dbFutureValue { _.billingProjectQuery.listEverything() } shouldEqual Seq()
   }
 }
