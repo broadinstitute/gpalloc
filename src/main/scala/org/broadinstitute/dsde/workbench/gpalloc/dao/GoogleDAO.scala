@@ -10,6 +10,8 @@ abstract class GoogleDAO {
   def transferProjectOwnership(project: String, owner: String): Future[AssignedProject]
   def scrubBillingProject(projectName: String): Future[Unit]
 
+  def overPetLimit(projectName: String): Future[Boolean]
+
   def createProject(projectName: String, billingAccountId: String): Future[ActiveOperationRecord]
   def pollOperation(operation: ActiveOperationRecord): Future[ActiveOperationRecord]
   def cleanupDeployment(projectName: String): Future[Unit]

@@ -49,7 +49,8 @@ object Boot extends App with LazyLogging {
       dmConfig.cleanupDeploymentAfterCreating,
       dmConfig.requesterPaysRole,
       gpAllocConfig.opsThrottle,
-      gpAllocConfig.opsThrottlePerDuration)
+      gpAllocConfig.opsThrottlePerDuration,
+      gpAllocConfig.maxPets)
 
     val projectCreationSupervisor = system.actorOf(
       ProjectCreationSupervisor.props(

@@ -5,27 +5,27 @@ import akka.testkit.{TestActorRef, TestKit, TestProbe}
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference, DbSingleton, TestComponent}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
-import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RequestNewProject, RegisterGPAllocService}
+import org.broadinstitute.dsde.workbench.gpalloc.monitor.ProjectCreationSupervisor.{RegisterGPAllocService, RequestNewProject}
 import org.broadinstitute.dsde.workbench.gpalloc.service.{GPAllocService, GoogleProjectNotFound, NoGoogleProjectAvailable, NotYourGoogleProject}
 import org.broadinstitute.dsde.workbench.util.NoopActor
 import org.scalatest.FlatSpecLike
 import org.scalatest.concurrent.Eventually._
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestComponent with FlatSpecLike with CommonTestData { testKit =>
   import profile.api._
 
   //returns a service and a probe that watches the pretend supervisor actor
-  def gpAllocService(dbRef: DbReference, minimumFreeProjects: Int, abandonmentTime: FiniteDuration = 20 hours, minimumProjects: Int = 0): (GPAllocService, TestProbe, MockGoogleDAO) = {
-    val mockGoogleDAO = new MockGoogleDAO()
+  def gpAllocService(dbRef: DbReference, minimumFreeProjects: Int, abandonmentTime: FiniteDuration = 20 hours, minimumProjects: Int = 0, googleDAO: MockGoogleDAO = new MockGoogleDAO()): (GPAllocService, TestProbe, MockGoogleDAO) = {
     val probe = TestProbe()
     val noopActor = probe.childActorOf(NoopActor.props)
     testKit watch noopActor
     val newConf = gpAllocConfig.copy(minimumFreeProjects=minimumFreeProjects, minimumProjects=minimumProjects, abandonmentTime=abandonmentTime)
-    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, mockGoogleDAO, newConf)
+    val gpAlloc = new GPAllocService(dbRef, swaggerConfig, probe.ref, googleDAO, newConf)
     probe.expectMsgClass(1 seconds, classOf[RegisterGPAllocService])
-    (gpAlloc, probe, mockGoogleDAO)
+    (gpAlloc, probe, googleDAO)
   }
 
   "GPAllocService" should "request an existing google project" in isolatedDbTest {
@@ -256,5 +256,39 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     }
     dbFutureValue { _.billingProjectQuery.listEverything() } shouldEqual Seq()
 
+  }
+
+  class TooManyPetsGoogleDAO(exemptProjects: Set[String] = Set.empty) extends MockGoogleDAO {
+    override def overPetLimit(projectName: String): Future[Boolean] = {
+      if (exemptProjects.contains(projectName)) {
+        Future.successful(false)
+      } else {
+        Future.successful(true)
+      }
+    }
+  }
+
+  it should "delete projects that have too many pets when they are released" in isolatedDbTest {
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, googleDAO = new TooManyPetsGoogleDAO)
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
+    dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
+
+    gpAlloc.releaseGoogleProject(userInfo.userEmail, newProjectName).futureValue
+    eventually {
+      mockGoogleDAO.deletedProjects shouldBe Set(newProjectName)
+    }
+    dbFutureValue { _.billingProjectQuery.listEverything() } shouldEqual Seq()
+  }
+
+  it should "delete projects with too many pets when they are forcefully cleaned up" in isolatedDbTest {
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, googleDAO = new TooManyPetsGoogleDAO(Set(newProjectName2)))
+    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
+    saveProjectAndOps(newProjectName2, freshOpRecord(newProjectName2), BillingProjectStatus.Unassigned) shouldEqual newProjectName2
+
+    gpAlloc.forceCleanupAll()
+    eventually {
+      mockGoogleDAO.deletedProjects shouldBe Set(newProjectName)
+      mockGoogleDAO.scrubbedProjects shouldBe Set(newProjectName2)
+    }
   }
 }
