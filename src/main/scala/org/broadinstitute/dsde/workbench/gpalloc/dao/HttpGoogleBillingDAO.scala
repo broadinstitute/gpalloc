@@ -705,9 +705,11 @@ class HttpGoogleBillingDAO(
         gke.projects().zones().clusters().list(projectName, "us-central1-a")
       )
       gkeClusters = googNull(result.getClusters)
+      _ = logger info s"!! project: $projectName"
       _ <- sequentially(gkeClusters) { gkeCluster =>
         val nameString =
           s"projects/${projectName}/locations/${gkeCluster.getLocation}/clusters/${gkeCluster.getName}"
+        _ = logger info s"cluster name string: $nameString"
         googleRq(
           gke
             .projects()
