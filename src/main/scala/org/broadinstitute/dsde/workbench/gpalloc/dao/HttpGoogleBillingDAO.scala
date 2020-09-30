@@ -198,8 +198,8 @@ class HttpGoogleBillingDAO(appName: String,
       googleProject <- getGoogleProject(projectName)
       _ <- cleanupClusters(projectName)
       _ <- cleanupVMs(projectName)
-      _ <- cleanupDisks(projectName)
       _ <- cleanupGkeClusters(projectName)
+      _ <- cleanupDisks(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupCromwellAuthBucket(projectName)
       _ <- updateGoogleBillingInfo(projectName, defaultBillingAccount)
@@ -496,7 +496,7 @@ class HttpGoogleBillingDAO(appName: String,
   def cleanupGkeClusters(projectName: String): Future[Unit] =
     for {
       result <- googleRq(
-        gke.projects().zones().clusters().list(projectName, "us-central1-a")
+        gke.projects().locations().clusters().list(s"projects/${projectName}/locations/us-central1-a")
       )
       gkeClusters = googNull(result.getClusters)
       _ <- sequentially(gkeClusters) { gkeCluster =>
