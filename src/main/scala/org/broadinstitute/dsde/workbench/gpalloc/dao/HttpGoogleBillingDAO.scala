@@ -502,7 +502,7 @@ class HttpGoogleBillingDAO(appName: String,
       _ <- sequentially(gkeClusters) { gkeCluster =>
         val nameString =
           s"projects/${projectName}/locations/${gkeCluster.getLocation}/clusters/${gkeCluster.getName}"
-        logger info s"cluster name string: ${nameString}"
+        logger debug s"GKE cluster name string: ${nameString}"
         googleRq(
           gke
             .projects()
