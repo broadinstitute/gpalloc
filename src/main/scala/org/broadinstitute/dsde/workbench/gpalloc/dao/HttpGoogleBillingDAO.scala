@@ -498,13 +498,7 @@ class HttpGoogleBillingDAO(appName: String,
       result <- googleRq(
         gke.projects().locations().clusters().list(s"projects/${projectName}/locations/us-central1-a")
       )
-      result2 <- googleRq(
-        gke.projects().zones().clusters().list(projectName, "us-central1-a")
-      )
       gkeClusters = googNull(result.getClusters)
-      gkeClusters2 = googNull(result2.getClusters)
-      _ = logger debug s"!! NON deprecated list: ${gkeClusters.flatMap(_.toString)}"
-      _ = logger debug s"!! deprecated list: ${gkeClusters2.flatMap(_.toString)}"
       _ <- sequentially(gkeClusters) { gkeCluster =>
         val nameString =
           s"projects/${projectName}/locations/${gkeCluster.getLocation}/clusters/${gkeCluster.getName}"
