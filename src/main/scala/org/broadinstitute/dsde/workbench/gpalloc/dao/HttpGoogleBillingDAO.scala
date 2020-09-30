@@ -25,6 +25,7 @@ import com.google.api.services.compute.model.UsageExportLocation
 import com.google.api.services.compute.{Compute, ComputeScopes}
 import com.google.api.services.genomics.GenomicsScopes
 import com.google.api.services.iam.v1.Iam
+import com.google.api.services.container.Container
 import com.google.api.services.dataproc.Dataproc
 import com.google.api.services.iam.v1.model.{ServiceAccount, ServiceAccountKey}
 import com.google.api.services.plus.PlusScopes
@@ -156,6 +157,10 @@ class HttpGoogleBillingDAO(appName: String,
     new DeploymentManagerV2Beta.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
   }
 
+  def gke: Container = {
+    new Container.Builder(httpTransport, jsonFactory, credential).setApplicationName(appName).build()
+  }
+
 
   //leaving this floating around because it's useful for debugging
   implicit class DebuggableFuture[T](f: Future[T]) {
@@ -194,6 +199,7 @@ class HttpGoogleBillingDAO(appName: String,
       _ <- cleanupClusters(projectName)
       _ <- cleanupVMs(projectName)
       _ <- cleanupDisks(projectName)
+      _ <- cleanupGkeClusters(projectName)
       _ <- cleanupPolicyBindings(projectName, googleProject.getProjectNumber)
       _ <- cleanupCromwellAuthBucket(projectName)
       _ <- updateGoogleBillingInfo(projectName, defaultBillingAccount)
@@ -484,6 +490,26 @@ class HttpGoogleBillingDAO(appName: String,
       diskNames = disks.map(i => i.getName)
       _ <- sequentially(diskNames) { diskName =>
         googleRq(computeManager.disks().delete(projectName, "us-central1-a", diskName))
+      }
+    } yield {}
+
+  def cleanupGkeClusters(projectName: String): Future[Unit] =
+    for {
+      result <- googleRq(
+        gke.projects().zones().clusters().list(projectName, "us-central1-a")
+      )
+      gkeClusters = googNull(result.getClusters)
+      _ <- sequentially(gkeClusters) { gkeCluster =>
+        val nameString =
+          s"projects/${projectName}/locations/${gkeCluster.getLocation}/clusters/${gkeCluster.getName}"
+        logger info s"cluster name string: ${nameString}"
+        googleRq(
+          gke
+            .projects()
+            .locations()
+            .clusters()
+            .delete(nameString)
+        )
       }
     } yield {}
 

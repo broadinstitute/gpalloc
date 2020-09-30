@@ -63,6 +63,7 @@ object Dependencies {
   val liquibase: ModuleID = "org.liquibase"       % "liquibase-core"        % "3.5.3"
 
   val googleBilling: ModuleID = "com.google.apis" % "google-api-services-cloudbilling" % "v1-rev16-1.23.0" excludeAll(excludeGuavaJDK5)
+  val googleContainerV1: ModuleID = "com.google.apis" % "google-api-services-container" % "v1-rev20200805-1.30.10"
   val googleDataproc: ModuleID =    "com.google.apis"     % "google-api-services-dataproc" % s"v1-rev91-$googleV" excludeAll(excludeGuavaJDK5, excludeJacksonCore, excludeFindbugsJsr, excludeHttpComponent)
   val googleDeploymentManager: ModuleID = "com.google.apis"   % "google-api-services-deploymentmanager" % ("v2beta-rev20181207-1.28.0")
   val googleRpc: ModuleID =               "io.grpc" % "grpc-core" % "1.5.0"
@@ -102,6 +103,7 @@ object Dependencies {
     workbenchMetrics,
 
     googleBilling,
+    googleContainerV1,
     googleDataproc,
     googleDeploymentManager,
     googleRpc,
