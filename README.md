@@ -130,3 +130,7 @@ gpalloc-beta $ sudo docker-compose -p gpalloc -f /app/docker-compose.yml rm -f
 gpalloc-beta $ sudo docker-compose -p gpalloc -f /app/docker-compose.yml pull
 gpalloc-beta $ sudo docker-compose -p gpalloc -f /app/docker-compose.yml up -d
 ```
+
+### Communications
+
+- GPalloc is used by various services in `dsp-workbench`. If you're re-creating projects pool, please send a heads-up for interruptions in `#dsp-workbench`.
