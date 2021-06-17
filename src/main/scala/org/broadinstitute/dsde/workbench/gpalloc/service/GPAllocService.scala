@@ -2,9 +2,10 @@ package org.broadinstitute.dsde.workbench.gpalloc.service
 
 import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.gpalloc.config.{GPAllocConfig, SwaggerConfig}
-import org.broadinstitute.dsde.workbench.gpalloc.dao.{GoogleDAO}
+import org.broadinstitute.dsde.workbench.gpalloc.dao.GoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference, RacyProjectsException}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus.BillingProjectStatus
 import org.broadinstitute.dsde.workbench.gpalloc.model.{AssignedProject, GPAllocException}
@@ -79,7 +80,7 @@ class GPAllocService(protected val dbRef: DbReference,
         //onComplete will return the original future, i.e. authCheck, and not wait for onComplete to complete.
         //we're kicking off this work but not monitoring it.
         val cleanup = for {
-          overPetLimit <- googleBillingDAO.overPetLimit(project)
+          overPetLimit <- overPetLimitOrProjectDeleted(project)
           _ <- if (overPetLimit) nukeProject(project) else releaseProjectInternal(project)
         } yield {
           logger.info(s"successfully ${ if(overPetLimit) "nuked" else "released" } ${ if(becauseAbandoned) "abandoned" else "" } project $project")
@@ -121,7 +122,7 @@ class GPAllocService(protected val dbRef: DbReference,
       //the below future will fail if the project is already assigned to someone else.
       //that's okay -- we don't want to clean it up in that case.
       _ <- dbRef.inTransaction { da => da.billingProjectQuery.maybeRacyAssignProjectToOwner("gpalloc@cleaning.up", project) }
-      overPetLimit <- googleBillingDAO.overPetLimit(project)
+      overPetLimit <- overPetLimitOrProjectDeleted(project)
       _ <- if (overPetLimit) nukeProject(project) else releaseProjectInternal(project)
     } yield ()
     cleanup.onComplete {
@@ -130,6 +131,15 @@ class GPAllocService(protected val dbRef: DbReference,
       case Success(_) => logger.info(s"successful forceCleanup of $project")
     }
     cleanup
+  }
+
+  private def overPetLimitOrProjectDeleted(project: String): Future[Boolean] = {
+    googleBillingDAO.overPetLimit(project).recover {
+      case t: GoogleJsonResponseException if t.getStatusCode == 404 => {
+        logger.info(s"Could not locate $project in Google, removing it from database")
+        true
+      }
+    }
   }
 
   private def releaseProjectInternal(project: String): Future[Unit] = {
