@@ -2,6 +2,9 @@ package org.broadinstitute.dsde.workbench.gpalloc
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.{TestActorRef, TestKit, TestProbe}
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.client.http.HttpHeaders
+import com.google.api.client.http.HttpResponseException.Builder
 import org.broadinstitute.dsde.workbench.gpalloc.dao.MockGoogleDAO
 import org.broadinstitute.dsde.workbench.gpalloc.db.{BillingProjectRecord, DbReference, DbSingleton, TestComponent}
 import org.broadinstitute.dsde.workbench.gpalloc.model.BillingProjectStatus
@@ -289,6 +292,35 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     eventually {
       mockGoogleDAO.deletedProjects shouldBe Set(newProjectName)
       mockGoogleDAO.scrubbedProjects shouldBe Set(newProjectName2)
+    }
+  }
+
+  class NonExistentProject() extends MockGoogleDAO {
+    override def overPetLimit(projectName: String): Future[Boolean] = {
+      Future.failed(new GoogleJsonResponseException(new Builder(404, "project not found", new HttpHeaders()), null))
+    }
+  }
+
+  it should "tolerate releasing a project that has been deleted in Google" in isolatedDbTest {
+    val nonExistentProjectName = "does-not-exist"
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, googleDAO = new NonExistentProject())
+    saveProjectAndOps(nonExistentProjectName, freshOpRecord(nonExistentProjectName), BillingProjectStatus.Unassigned) shouldEqual nonExistentProjectName
+    dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
+
+    gpAlloc.releaseGoogleProject(userInfo.userEmail, nonExistentProjectName).futureValue
+    eventually {
+      mockGoogleDAO.deletedProjects shouldBe Set(nonExistentProjectName)
+    }
+  }
+
+  it should "tolerate forcefully cleaning up a project that has been deleted in Google" in isolatedDbTest {
+    val nonExistentProjectName = "does-not-exist"
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, googleDAO = new NonExistentProject())
+    saveProjectAndOps(nonExistentProjectName, freshOpRecord(nonExistentProjectName), BillingProjectStatus.Unassigned) shouldEqual nonExistentProjectName
+
+    gpAlloc.forceCleanupAll()
+    eventually {
+      mockGoogleDAO.deletedProjects shouldBe Set(nonExistentProjectName)
     }
   }
 }
