@@ -295,19 +295,32 @@ class GPAllocServiceSpec extends TestKit(ActorSystem("gpalloctest")) with TestCo
     }
   }
 
-  it should "tolerate releasing a project that has been deleted in Google" in isolatedDbTest {
-    class NonExistentProject() extends MockGoogleDAO {
-      override def overPetLimit(projectName: String): Future[Boolean] = {
-        Future.failed(new GoogleJsonResponseException(new Builder(404, "project not found", new HttpHeaders()), null))
-      }
+  class NonExistentProject() extends MockGoogleDAO {
+    override def overPetLimit(projectName: String): Future[Boolean] = {
+      Future.failed(new GoogleJsonResponseException(new Builder(404, "project not found", new HttpHeaders()), null))
     }
+  }
 
+  it should "tolerate releasing a project that has been deleted in Google" in isolatedDbTest {
+    val nonExistentProjectName = "does-not-exist"
     val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, googleDAO = new NonExistentProject())
-    saveProjectAndOps(newProjectName, freshOpRecord(newProjectName), BillingProjectStatus.Unassigned) shouldEqual newProjectName
+    saveProjectAndOps(nonExistentProjectName, freshOpRecord(nonExistentProjectName), BillingProjectStatus.Unassigned) shouldEqual nonExistentProjectName
+    dbFutureValue { _.billingProjectQuery.assignProjectFromPool(userInfo.userEmail.value) }
+
+    gpAlloc.releaseGoogleProject(userInfo.userEmail, nonExistentProjectName).futureValue
+    eventually {
+      mockGoogleDAO.deletedProjects shouldBe Set(nonExistentProjectName)
+    }
+  }
+
+  it should "tolerate forcefully cleaning up a project that has been deleted in Google" in isolatedDbTest {
+    val nonExistentProjectName = "does-not-exist"
+    val (gpAlloc, _, mockGoogleDAO) = gpAllocService(dbRef, 0, googleDAO = new NonExistentProject())
+    saveProjectAndOps(nonExistentProjectName, freshOpRecord(nonExistentProjectName), BillingProjectStatus.Unassigned) shouldEqual nonExistentProjectName
 
     gpAlloc.forceCleanupAll()
     eventually {
-      mockGoogleDAO.deletedProjects shouldBe Set(newProjectName)
+      mockGoogleDAO.deletedProjects shouldBe Set(nonExistentProjectName)
     }
   }
 }
