@@ -136,7 +136,7 @@ class GPAllocService(protected val dbRef: DbReference,
   private def overPetLimitOrProjectDeleted(project: String): Future[Boolean] = {
     googleBillingDAO.overPetLimit(project).recover {
       case t: GoogleJsonResponseException if t.getStatusCode == 404 => {
-        logger.info(s"Could not locate $project in Google, removing it from database")
+        logger.info(s"Could not locate $project in Google, it should be nuked")
         true
       }
     }
