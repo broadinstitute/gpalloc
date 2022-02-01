@@ -132,7 +132,7 @@ For gpalloc-qa: `gcloud beta compute ssh --zone "us-central1-a" "dsp-gpalloc-qa1
 Connect to the Broad Internal wifi or on the **non-split** VPN
 
 ##### Could not fetch resource | The resource ... was not found
-The VMs may have been replaced. [Look for the dsp-gpalloc VMs in the GCP Console](https://console.cloud.google.com/compute/instances?authuser=3&project=broad-dsp-techops). Auth as your @firecloud.org account. Update this doc as necessary.
+The VMs may have been replaced. [Look for the dsp-gpalloc VMs in the GCP Console](https://console.cloud.google.com/compute/instances?project=broad-dsp-techops). Auth as your @firecloud.org account. Update this doc as necessary.
 
 ##### Connection failed | We are unable to connect to the VM on port 22
 Don't try to connect to the VPN using GCP. It will only end in tears.
