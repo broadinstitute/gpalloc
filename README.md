@@ -68,7 +68,7 @@ Once you're done, tear down MySQL:
 
 ### Development cycle
 
-Note that you may need to [start/resume the dsp-gpalloc-beta VM in the GCP Console](https://console.cloud.google.com/compute/instances?authuser=3&project=broad-dsp-techops). Auth as your @firecloud.org account.
+Note that you may need to [start/resume the dsp-gpalloc-beta VM in the GCP Console](https://console.cloud.google.com/compute/instances?project=broad-dsp-techops). Auth as your @firecloud.org account.
 
 Note that the git branch name is used in the created project names, so  
 
