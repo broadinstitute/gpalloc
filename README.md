@@ -37,13 +37,13 @@ https://gpalloc-beta.dsp-techops.broadinstitute.org/ is the "developer" instance
 The conventions for developing on GPAlloc are a little different to what you're used to. The process goes as follows (the complicated steps will be outlined below, hold your horses):
 
 1. Branch off `develop` and make your changes.
-2. Test your changes by manually building the docker and using the gpalloc-instance-deploy Jenkins job to deploy it to gpalloc-beta (see below). Repeat until working.
+2. (Discretionary) Test your changes by [manually building the docker and using the gpalloc-instance-deploy Jenkins job to deploy it to gpalloc-beta](#development-cycle). Repeat until working.
 3. PR to `develop` and review.
 4. Wait for CircleCI to finish building off `develop`.
 5. To release to `master`, run `./scripts/release_master.sh`. This will force-push `develop` on to `master`. Yes, you do really want to do this!
-6. Wait for CircleCI to finish building off `master`.
-7. While you're waiting, make a new release in GitHub.
-8. Run the gpalloc-deploy Jenkins job to deploy to the "production" instances.
+6. [Wait for CircleCI to finish building off `master`](#watching-circleci-for-auto-builds-of-develop-and-master).
+7. [While you're waiting, make a new release in GitHub](#making-a-new-release-in-github)
+8. Run the gpalloc-deploy Jenkins job to deploy to the "production" instances. [Instructions to deploy to production are here](#deploying-the-master-branch-to-gpalloc-dev-and-gpalloc-qa)
 
 ### Getting started
 
@@ -68,10 +68,12 @@ Once you're done, tear down MySQL:
 
 ### Development cycle
 
+Note that you may need to [start/resume the dsp-gpalloc-beta VM in the GCP Console](https://console.cloud.google.com/compute/instances?authuser=3&project=broad-dsp-techops). Auth as your @firecloud.org account.
+
 Note that the git branch name is used in the created project names, so  
 
-a) don't make it too long -- 9 characters maximum 
-b) **don't put an underscore in it**.  
+1. don't make it too long -- 9 characters maximum 
+2. **don't put an underscore in it**.  
 
 Otherwise Google won't let you create the project (name too long or contains invalid characters).
 
@@ -110,6 +112,30 @@ This doesn't do anything per se, but it serves as a record of what got released 
 Use the [gpalloc-deploy](https://fc-jenkins.dsp-techops.broadinstitute.org/job/gpalloc-deploy/) Jenkins job for this. This time, select `image=master`. This will deploy to _both_ gpalloc-dev and gpalloc-qa.
 
 ## Miscellaneous things
+
+### Re-deploying gpalloc
+Follow the [instructions to deploy to production are here](#deploying-the-master-branch-to-gpalloc-dev-and-gpalloc-qa)
+
+### Certificate issues
+If re-deploying causes cert issues, we may need to [update the path to the certs, like we did in this PR](https://github.com/broadinstitute/gpalloc/pull/107).
+
+### Connecting to the gpalloc VM
+Make sure you're on the Broad Internal wifi or on the **non-split** VPN. Run the following from the command line:
+
+For gpalloc-dev: `gcloud beta compute ssh --zone "us-central1-a" "dsp-gpalloc-dev101"  --project "broad-dsp-techops" --account=xxxxxxxxxxxxxxxx@firecloud.org`
+
+For gpalloc-qa: `gcloud beta compute ssh --zone "us-central1-a" "dsp-gpalloc-qa101"  --project "broad-dsp-techops" --account=xxxxxxxxxxxxxxxxx@firecloud.org`
+
+#### Troubleshooting
+
+##### ssh: connect to host ... port 22: Operation timed out ...
+Connect to the Broad Internal wifi or on the **non-split** VPN
+
+##### Could not fetch resource | The resource ... was not found
+The VMs may have been replaced. [Look for the dsp-gpalloc VMs in the GCP Console](https://console.cloud.google.com/compute/instances?authuser=3&project=broad-dsp-techops). Auth as your @firecloud.org account. Update this doc as necessary.
+
+##### Connection failed | We are unable to connect to the VM on port 22
+Don't try to connect to the VPN using GCP. It will only end in tears.
 
 ### Deploying the `develop` branch to gpalloc-beta
 
