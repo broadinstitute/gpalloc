@@ -1,4 +1,6 @@
-# allo, gator
+# ARCHIVED ~allo, gator~
+
+GPALLOC HAS BEEN ARCHIVED
 
 Makes creating billing projects snappy!
 
